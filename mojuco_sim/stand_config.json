@@ -1,0 +1,34 @@
+{
+  "model": "../deep_robotics_model/M20/mjcf/M20.xml",
+  "physics_dt": 0.0025,
+  "control_dt": 0.02,
+  "base_height": 0.8028,
+  "base_quaternion_wxyz": [0.7071067811865476, 0.0, -0.7071067811865476, 0.0],
+  "policy_joint_names": [
+    "fl_hipx_joint", "fl_hipy_joint", "fl_knee_joint",
+    "fr_hipx_joint", "fr_hipy_joint", "fr_knee_joint",
+    "hl_hipx_joint", "hl_hipy_joint", "hl_knee_joint",
+    "hr_hipx_joint", "hr_hipy_joint", "hr_knee_joint",
+    "fl_wheel_joint", "fr_wheel_joint", "hl_wheel_joint", "hr_wheel_joint"
+  ],
+  "default_joint_positions": [
+    0.0, -1.64, 1.02, 0.0, -1.64, 1.02,
+    0.0, -0.92, -0.99, 0.0, -0.92, -0.99,
+    0.0, 0.0, 0.0, 0.0
+  ],
+  "joint_position_zero_indices": [3, 7, 11, 15],
+  "leg_action_scales": [0.125, 0.25, 0.25, 0.125, 0.25, 0.25, 0.125, 0.25, 0.25, 0.125, 0.25, 0.25],
+  "wheel_action_scale": 5.0,
+  "leg_kp": 80.0,
+  "leg_kd": 2.0,
+  "wheel_kd": 0.6,
+  "leg_torque_limit": 76.4,
+  "wheel_torque_limit": 21.6,
+  "wheel_armature": 0.00243216,
+  "angular_velocity_scale": 0.25,
+  "joint_velocity_scale": 0.05,
+  "observation_clip": 100.0,
+  "action_clip": 100.0,
+  "processed_action_clip": 100.0,
+  "command_limits": [1.0, 0.5, 1.0]
+}
