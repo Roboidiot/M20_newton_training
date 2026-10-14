@@ -16,8 +16,7 @@ wandb/
 .vscode/launch.json
 pyrightconfig.json
 
-# Source-only GitHub publication
-deep_robotics_model/
+# Source and robot assets; generated artifacts are excluded
 env/
 venv/
 _conda/

@@ -157,14 +157,19 @@ If Pylance or basedpyright cannot resolve modules, confirm that the selected int
 setup command, then reload the editor window. To add a missing extension or reduce indexing memory, edit the `extraPaths`
 array in the root `pyrightconfig.json`; remove simulator extension directories that the project does not use.
 
-## Source-only repository
+## Repository contents
 
-This repository contains task code, training configuration, scripts, tests, and dependency metadata.
-It excludes training logs, checkpoints and exported policies, virtual environments, caches, and robot
-model assets. The current robot assets must be supplied separately at these paths before running:
+This repository contains task code, training configuration, scripts, tests, dependency metadata, and
+all robot assets from `deep_robotics_model/`. It excludes training logs, checkpoints and exported
+policies, virtual environments, and caches.
 
-- `deep_robotics_model/M20/M20_usd/M20.usd`, together with its configuration USD layers and referenced meshes.
-- `deep_robotics_model/M20/mjcf/M20.xml` and its `meshes/` directory for optional MuJoCo validation.
+Included M20 assets:
+
+- `deep_robotics_model/M20/M20_usd/M20.usd` and its configuration USD layers for Isaac Lab training.
+- `deep_robotics_model/M20/urdf/M20.urdf` and its `meshes/` directory.
+- `deep_robotics_model/M20/mjcf/M20.xml` and its `meshes/` directory for MuJoCo validation.
+
+The model assets are stored directly in Git; no Git LFS download is needed.
 
 The Isaac Lab / Newton checkout and installed dependencies are external to this repository. Update the
 editable paths under `[tool.uv.sources]` in `pyproject.toml` for your installation before `uv sync`.
