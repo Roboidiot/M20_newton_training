@@ -1,10 +1,21 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2025 Deep Robotics
+# SPDX-License-Identifier: BSD 3-Clause
+
+# Copyright (c) 2024-2025 Ziqi Fan
+# SPDX-License-Identifier: Apache-2.0
+
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""This sub-module contains the functions that are specific to the environment."""
+"""This sub-module contains the functions that are specific to the M20 locomotion environment."""
 
-from isaaclab.utils.module import lazy_export
+from isaaclab.envs.mdp import *  # noqa: F401, F403
+from isaaclab_tasks.core.velocity.mdp import *  # noqa: F401, F403
 
-lazy_export()
+from .commands import *  # noqa: F401, F403
+from .curriculums import *  # noqa: F401, F403
+from .events import *  # noqa: F401, F403
+from .observations import *  # noqa: F401, F403
+from .rewards import *  # noqa: F401, F403

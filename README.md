@@ -4,7 +4,38 @@ An installable downstream Isaac Lab task package generated with a standard uv `s
 
 The registered tasks are:
 
-- `M20NewtonTraining-M20-M20`
+- `M20NewtonTraining-M20-M20-Flat`
+- `M20NewtonTraining-M20-M20-Rough`
+- `M20NewtonTraining-M20-M20-Sand`
+- `M20NewtonTraining-M20-M20-Stand`
+
+The M20 wheeled robot model lives in `deep_robotics_model/M20/` (USD, URDF, and MJCF), referenced by the
+`DEEPROBOTICS_M20_CFG` articulation in `src/M20_newton_training/assets/deeprobotics.py`.
+
+`M20NewtonTraining-M20-M20-Sand` puts each environment on a granular bed advanced by Newton's implicit MPM
+solver, coupled to the rigid robot solve. It therefore requires the Newton backend: the `newton_sand` physics
+preset is its default, and the PhysX presets leave the sand frozen.
+
+`M20NewtonTraining-M20-M20-Stand` trains upright locomotion with the robot's base +X axis pointing up.
+It uses only random rough roads, with a fixed height-noise sampling range of 1--16 cm and no terrain
+difficulty curriculum. Road layouts remain randomized within that range. The command slots
+`[vx, vy, wz]` map to body `[linear Y, linear Z, angular X]`, with ranges `[-1, 1] m/s`, `[-0.5, 0.5] m/s`, and
+`[-1, 1] rad/s`. Sampling reserves 20% for zero commands, 2% each for single-axis translation, and 20% for pure
+turning. The policy is blind to terrain heights; the critic receives the height scan. Height rewards target
+0.8028 m above the local ground. The default PPO budget is 20,000 iterations.
+
+Stand's `joint_mirror` term penalizes left/right front-leg asymmetry with weight `-1.0`, including
+during motion and turning. It uses `(hipx_left + hipx_right)^2 + (hipy_left - hipy_right)^2 +
+(knee_left - knee_right)^2`, without a gait-level or gravity gate. Rear legs and wheel joints are
+excluded from this term. Symmetry does not fix the front legs to their default joint angles.
+
+The shared `joint_pos_rel_without_wheel` observation now masks wheel angles in the articulation's native
+joint order before selecting/reordering observation joints. This preserves all leg-angle observations;
+the actor's wheel-angle slots are 12--15. Observation and action dimensions are unchanged. Checkpoints
+trained before this fix used an incorrect actor mask on Newton (slots 3, 7, 11, 15), so resuming them
+changes their observation inputs and requires adaptation and validation. For MuJoCo replay, use the
+matching `joint_position_zero_indices` in `mojuco_sim/stand_config.json`; its default retains the old mask
+for the existing exported policy. Policies trained with the fix require `[12, 13, 14, 15]`.
 
 ## Installation
 
@@ -56,6 +87,23 @@ uv run isaaclab benchmark training --rl_library <RL_LIBRARY> --task <TASK_NAME> 
 ```
 
 Use `physics=<PRESET>` to select one of the presets shown by `list_envs.py`.
+
+### Stand keyboard playback
+
+Stand's play mode replaces the random command sampler with keyboard input from a Newton window:
+
+```bash
+uv run isaaclab play --rl_library rsl_rl --task M20NewtonTraining-M20-M20-Stand \
+  --checkpoint latest physics=newton_mjwarp --visualizer newton --num_envs 1 --real-time
+```
+
+Click the Newton window to focus it. Hold `I/K` for positive/negative `vx` (body Y, 0.5 m/s),
+`J/L` for positive/negative `vy` (body Z, 0.25 m/s), and `U/O` for positive/negative `wz`
+(body X, 0.5 rad/s). Releasing a key stops that command axis; holding Backspace forces all commands
+to zero. These speeds are half of each configured command range's maximum magnitude. Space pauses
+the viewer, and WASD/arrow keys retain their camera controls. Closing the window exits playback.
+For automatic random commands during play, add `--train_env_cfg` to bypass the play-mode switch.
+The training command generator and policy input dimensions are unchanged.
 
 ## Project structure
 

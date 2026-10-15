@@ -11,11 +11,26 @@ import M20_newton_training.tasks  # noqa: F401
 
 
 def test_task_registrations():
-    """The generated tasks must expose valid environment and agent entry points."""
+    """The M20 tasks must expose valid environment and agent entry points."""
     expected = {
-        "M20NewtonTraining-M20-M20": {
+        "M20NewtonTraining-M20-M20-Flat": {
             "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-            "env_cfg_entry_point": "M20_newton_training.tasks.m20.config.M20.env_cfg:M20EnvCfg",
+            "env_cfg_entry_point": "M20_newton_training.tasks.m20.config.M20.flat_env_cfg:DeeproboticsM20FlatEnvCfg",
+            "default_agent": "rsl_rl",
+        },
+        "M20NewtonTraining-M20-M20-Rough": {
+            "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+            "env_cfg_entry_point": "M20_newton_training.tasks.m20.config.M20.rough_env_cfg:DeeproboticsM20RoughEnvCfg",
+            "default_agent": "rsl_rl",
+        },
+        "M20NewtonTraining-M20-M20-Sand": {
+            "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+            "env_cfg_entry_point": "M20_newton_training.tasks.m20.config.M20.sand_env_cfg:DeeproboticsM20SandEnvCfg",
+            "default_agent": "rsl_rl",
+        },
+        "M20NewtonTraining-M20-M20-Stand": {
+            "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+            "env_cfg_entry_point": "M20_newton_training.tasks.m20.config.M20.stand_env_cfg:DeeproboticsM20StandEnvCfg",
             "default_agent": "rsl_rl",
         },
     }
