@@ -12,6 +12,7 @@
 """This sub-module contains the functions that are specific to the M20 locomotion environment."""
 
 from isaaclab.envs.mdp import *  # noqa: F401, F403
+
 from isaaclab_tasks.core.velocity.mdp import *  # noqa: F401, F403
 
 from .commands import *  # noqa: F401, F403

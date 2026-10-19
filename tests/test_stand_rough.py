@@ -8,6 +8,7 @@ import torch
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.terrains import TerrainGenerator
+from isaaclab.utils import replace
 
 from M20_newton_training.tasks.m20.config.M20.agents.rsl_rl_ppo_cfg import DeeproboticsM20StandPPORunnerCfg
 from M20_newton_training.tasks.m20.config.M20.flat_env_cfg import DeeproboticsM20FlatEnvCfg
@@ -26,11 +27,14 @@ from M20_newton_training.tasks.m20.config.M20.stand_terrains import (
 class _Scene(dict):
     """Scene entities plus environment origins, without simulator initialization."""
 
+    env_origins: torch.Tensor
+
 
 def test_stand_has_only_rough_roads_and_disables_terrain_curriculum():
     cfg = DeeproboticsM20StandEnvCfg()
     terrain = cfg.scene.terrain
     generator = terrain.terrain_generator
+    assert generator is not None
     assert terrain.terrain_type == "generator"
     assert set(generator.sub_terrains) == {"random_rough"}
     assert isinstance(generator.sub_terrains["random_rough"], StandRandomRoughTerrainCfg)
@@ -39,12 +43,14 @@ def test_stand_has_only_rough_roads_and_disables_terrain_curriculum():
     assert cfg.curriculum.terrain_levels is None
     assert cfg.curriculum.gait_level is None
     assert cfg.curriculum.command_levels is None
+    assert cfg.scene.height_scanner is not None
     assert cfg.scene.height_scanner.ray_alignment == "world"
     assert cfg.scene.height_scanner_base.ray_alignment == "world"
     assert cfg.observations.policy.height_scan is None
     assert cfg.observations.critic.height_scan is not None
     assert cfg.rewards.base_height_l2.params["sensor_cfg"].name == "height_scanner_base"
-    for name in ("undesired_contacts", "contact_forces", "joint_acc_l2", "joint_acc_wheel_l2", "joint_pos_limits"):
+    assert cfg.rewards.undesired_contacts is None
+    for name in ("contact_forces", "joint_acc_l2", "joint_acc_wheel_l2", "joint_pos_limits"):
         assert getattr(cfg.rewards, name).weight < 0.0
     assert cfg.rewards.rotation_gait_status is None
     assert cfg.rewards.rotation_gait_symmetry is None
@@ -52,6 +58,7 @@ def test_stand_has_only_rough_roads_and_disables_terrain_curriculum():
 
     # Creating Stand must not remove stairs or enable scans/curricula in sibling tasks.
     rough = DeeproboticsM20RoughEnvCfg()
+    assert rough.scene.terrain.terrain_generator is not None
     assert "pyramid_stairs" in rough.scene.terrain.terrain_generator.sub_terrains
     assert rough.scene.terrain.max_init_terrain_level == 5
     flat = DeeproboticsM20FlatEnvCfg()
@@ -75,9 +82,9 @@ def test_generated_road_ignores_difficulty_without_mutating_config():
 
 
 def test_custom_road_can_be_built_by_isaaclab_terrain_generator():
-    cfg = DeeproboticsM20StandEnvCfg().scene.terrain.terrain_generator.replace(
-        seed=42, num_rows=2, num_cols=1, border_width=0.0, color_scheme="none"
-    )
+    generator = DeeproboticsM20StandEnvCfg().scene.terrain.terrain_generator
+    assert generator is not None
+    cfg = replace(generator, seed=42, num_rows=2, num_cols=1, border_width=0.0, color_scheme="none")
     terrain = TerrainGenerator(cfg, device="cpu")
     assert terrain.terrain_origins.shape == (2, 1, 3)
     assert np.isfinite(terrain.terrain_mesh.vertices).all()

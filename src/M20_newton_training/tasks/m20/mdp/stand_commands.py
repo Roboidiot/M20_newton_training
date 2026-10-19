@@ -10,6 +10,7 @@ body-frame ``[linear Y, linear Z, angular X]`` in this task.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import torch
 
@@ -19,6 +20,8 @@ from isaaclab.utils import configclass
 
 class StandVelocityCommand(UniformVelocityCommand):
     """Track Y/Z translation and X-axis rotation, using episode-mean errors."""
+
+    cfg: StandVelocityCommandCfg
 
     def __init__(self, cfg: StandVelocityCommandCfg, env):
         if cfg.heading_command:
@@ -31,16 +34,16 @@ class StandVelocityCommand(UniformVelocityCommand):
         self.metrics["knee_pos"] = torch.zeros(self.num_envs, device=self.device)
         self._base_z_sum = torch.zeros(self.num_envs, device=self.device)
         self._knee_pos_sum = torch.zeros(self.num_envs, device=self.device)
-        self._knee_joint_ids = self.robot.find_joints(".*[Kk]nee.*")[0]
+        self._knee_joint_ids = cast(list[int], self.robot.find_joints(".*[Kk]nee.*")[0])
 
-    def _resample_command(self, env_ids: Sequence[int]):
+    def _resample_command(self, env_ids: Sequence[int] | torch.Tensor | slice):
         """Use Rough's sampling proportions, with direct X-axis turn commands."""
-        super()._resample_command(env_ids)
+        super()._resample_command(cast(Sequence[int], env_ids))
         command = self.vel_command_b[env_ids].clone()
         sampled_linear = command[:, :2].clone()
         command[:, :2] *= (torch.linalg.norm(command[:, :2], dim=1) > 0.2).unsqueeze(1)
 
-        slot = torch.rand(len(env_ids), device=self.device)
+        slot = torch.rand(command.shape[0], device=self.device)
         zero_end = self.cfg.rel_zero_vel_envs
         y_end = zero_end + self.cfg.rel_only_lin_y_envs
         x_end = y_end + self.cfg.rel_only_lin_x_envs
@@ -80,14 +83,14 @@ class StandVelocityCommand(UniformVelocityCommand):
         moving = (torch.linalg.norm(self.command, dim=1) > 0.1) | (torch.linalg.norm(planar_velocity, dim=1) > 0.5)
         self._knee_pos_sum += torch.where(moving, knee_deviation, 5.0 * knee_deviation)
 
-    def reset(self, env_ids: Sequence[int] | None = None) -> dict[str, float]:
+    def reset(self, env_ids: Sequence[int] | torch.Tensor | slice | None = None) -> dict[str, torch.Tensor]:
         # Use the upstream reset to finalize tracking errors and success_rate,
         # log episode means, and clear only the selected environments' buffers.
-        ids = torch.arange(self.num_envs, device=self.device) if env_ids is None else env_ids
+        ids = slice(None) if env_ids is None else env_ids
         count = self._step_count[ids].clamp_min(1.0)
         self.metrics["base_z"][ids] = self._base_z_sum[ids] / count
         self.metrics["knee_pos"][ids] = self._knee_pos_sum[ids] / count
-        extras = super().reset(ids)
+        extras = super().reset(cast(Sequence[int], ids))
         self._base_z_sum[ids] = 0.0
         self._knee_pos_sum[ids] = 0.0
         return extras

@@ -111,7 +111,7 @@ class StandSimulation:
         joints = [self._id(mujoco.mjtObj.mjOBJ_JOINT, name) for name in names]
         self.qpos_ids = self.model.jnt_qposadr[joints]
         self.qvel_ids = self.model.jnt_dofadr[joints]
-        self.actuator_ids = np.asarray([self._id(mujoco.mjtObj.mjOBJ_ACTUATOR, name) for name in names])
+        self.actuator_ids = np.asarray([self._id(mujoco.mjtObj.mjOBJ_ACTUATOR, name) for name in names], dtype=np.intp)
         if not np.array_equal(self.model.actuator_trnid[self.actuator_ids, 0], joints):
             raise ValueError("The named actuators must drive their corresponding joints.")
         if not np.allclose(self.model.actuator_gear[self.actuator_ids, 0], 1.0):
@@ -134,7 +134,7 @@ class StandSimulation:
                 raise ValueError(f"Expected policy output (1,16), got {tuple(output.shape)}.")
         self.reset()
 
-    def _id(self, kind, name):
+    def _id(self, kind: mujoco.mjtObj, name: str) -> int:
         result = mujoco.mj_name2id(self.model, kind, name)
         if result < 0:
             raise ValueError(f"MJCF is missing {kind.name}: {name}")

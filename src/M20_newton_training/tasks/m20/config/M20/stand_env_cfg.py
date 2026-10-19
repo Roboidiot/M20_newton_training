@@ -18,11 +18,11 @@ import math
 import torch
 
 import isaaclab.envs.mdp as base_mdp
-from isaaclab.assets import ArticulationCfg, RigidObject
+from isaaclab.assets import ArticulationCfg, RigidObject, Articulation
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
-from isaaclab.utils import configclass
+from isaaclab.utils import configclass, replace
 
 from M20_newton_training.assets.deeprobotics import DEEPROBOTICS_M20_CFG
 from M20_newton_training.tasks.m20.config.M20.rough_env_cfg import DeeproboticsM20RoughEnvCfg
@@ -51,7 +51,8 @@ STAND_BASE_HEIGHT = 0.8028
 # Quaternion (x, y, z, w) mapping base_link +X onto world +Z (up): a -90 deg rotation about the world Y axis.
 STAND_BASE_ROT = (0.0, -0.5 * math.sqrt(2.0), 0.0, 0.5 * math.sqrt(2.0))
 
-DEEPROBOTICS_M20_STAND_CFG = DEEPROBOTICS_M20_CFG.replace(
+DEEPROBOTICS_M20_STAND_CFG = replace(
+    DEEPROBOTICS_M20_CFG,
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, STAND_BASE_HEIGHT),
         rot=STAND_BASE_ROT,
@@ -132,24 +133,6 @@ def stand_still_joint_deviation_l1(
     return base_mdp.joint_deviation_l1(env, asset_cfg) * (torch.linalg.norm(command, dim=1) < command_threshold)
 
 
-def stand_front_joint_mirror_l2(
-    env,
-    asset_cfg: SceneEntityCfg,
-    mirror_asset_cfg: SceneEntityCfg,
-    joint_signs: tuple[float, float, float] = (-1.0, 1.0, 1.0),
-) -> torch.Tensor:
-    """Penalize front-leg mirror error without command, gravity, or gait-level gates.
-
-    In hipx/hipy/knee order, hipx mirrors with opposite joint angles while hipy
-    and knee mirror with equal angles, matching the M20's left/right joint axes.
-    """
-    asset = env.scene[asset_cfg.name]
-    left = asset.data.joint_pos.torch[:, asset_cfg.joint_ids]
-    right = asset.data.joint_pos.torch[:, mirror_asset_cfg.joint_ids]
-    error = left - right * left.new_tensor(joint_signs)
-    return torch.sum(torch.square(error), dim=1)
-
-
 def stand_action_rate_l2(env) -> torch.Tensor:
     """Penalize first-order action change."""
     return torch.sum(torch.square(env.action_manager.action - env.action_manager.prev_action), dim=1)
@@ -171,7 +154,7 @@ def stand_action_smooth_l2(env) -> torch.Tensor:
 
 def stand_joint_torques_l2(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize applied joint torques."""
-    asset: RigidObject = env.scene[asset_cfg.name]
+    asset: Articulation = env.scene[asset_cfg.name]
     return torch.sum(torch.square(asset.data.applied_torque[:, asset_cfg.joint_ids]), dim=1)
 
 
@@ -215,17 +198,24 @@ class DeeproboticsM20StandEnvCfg(DeeproboticsM20RoughEnvCfg):
         super().__post_init__()
 
         # --- Robot: standing pose, base +X -> world +Z, base height 0.8028 m ---
-        self.scene.robot = DEEPROBOTICS_M20_STAND_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot = replace(DEEPROBOTICS_M20_STAND_CFG, prim_path="{ENV_REGEX_NS}/Robot")
 
         # Every tile uses the same roughness range; no progression between levels.
-        self.scene.terrain.terrain_generator = self.scene.terrain.terrain_generator.replace(
+        generator = self.scene.terrain.terrain_generator
+        if generator is None:
+            raise ValueError("Stand requires a terrain generator for its rough roads.")
+        self.scene.terrain.terrain_generator = replace(
+            generator,
             curriculum=False, slope_threshold=None, sub_terrains={"random_rough": StandRandomRoughTerrainCfg()}
         )
         self.scene.terrain.max_init_terrain_level = None
         self.curriculum.terrain_levels = None
         self.curriculum.gait_level = None
         # World-aligned scans avoid extracting yaw from an upright base frame.
-        self.scene.height_scanner.ray_alignment = "world"
+        height_scanner = self.scene.height_scanner
+        if height_scanner is None:
+            raise ValueError("Stand requires height_scanner for the critic's terrain observations.")
+        height_scanner.ray_alignment = "world"
         self.scene.height_scanner_base.ray_alignment = "world"
         self.scene.height_scanner_base.update_period = self.decimation * self.sim.dt
 
@@ -243,6 +233,7 @@ class DeeproboticsM20StandEnvCfg(DeeproboticsM20RoughEnvCfg):
         self.rewards.hipx_joint_pos_penalty.weight = 0.0
         self.rewards.hipy_joint_pos_penalty.weight = 0.0
         self.rewards.knee_joint_pos_penalty.weight = 0.0
+        self.rewards.joint_mirror.weight = 0.0
         self.rewards.undesired_contacts.weight = 0.0
         self.rewards.contact_forces.weight = 0.0
         self.rewards.feet_air_time_ang_z_M20.weight = 0.0
@@ -254,7 +245,7 @@ class DeeproboticsM20StandEnvCfg(DeeproboticsM20RoughEnvCfg):
         # --- Stand rewards ---
         # Hold the standing leg posture at rest; allow movement and pure turning.
         self.rewards.stand_still.func = stand_still_joint_deviation_l1
-        self.rewards.stand_still.weight = -0.001
+        self.rewards.stand_still.weight = -0.1
         # Terrain-relative height replaces the old fixed world-height target.
         self.rewards.base_height_l2.func = stand_base_height_l2
         self.rewards.base_height_l2.params = {
@@ -286,28 +277,12 @@ class DeeproboticsM20StandEnvCfg(DeeproboticsM20RoughEnvCfg):
         self.rewards.undesired_contacts.func = base_mdp.undesired_contacts
         self.rewards.undesired_contacts.weight = -0.0
         self.rewards.contact_forces.func = base_mdp.contact_forces
-        self.rewards.contact_forces.weight = -1.5e-5
+        self.rewards.contact_forces.weight = -1.5e-4
         self.rewards.joint_acc_l2.weight = -2e-7
         self.rewards.joint_acc_wheel_l2.weight = -1e-7
         self.rewards.joint_pos_limits.weight = -1.0
         self.rewards.joint_deviation_l1.params["asset_cfg"].joint_names = self.leg_joint_names
         self.rewards.joint_deviation_l1.weight = -0.01
-
-        # Mirror the upper/front legs; the rear legs remain free to balance and steer.
-        # Rough's diagonal pairing and Z-up/gait gates do not apply to upright Stand.
-        self.rewards.joint_mirror = RewTerm(
-            func=stand_front_joint_mirror_l2,
-            weight=-1.0,
-            params={
-                "asset_cfg": SceneEntityCfg(
-                    "robot", joint_names=["fl_hipx_joint", "fl_hipy_joint", "fl_knee_joint"], preserve_order=True
-                ),
-                "mirror_asset_cfg": SceneEntityCfg(
-                    "robot", joint_names=["fr_hipx_joint", "fr_hipy_joint", "fr_knee_joint"], preserve_order=True
-                ),
-                "joint_signs": (-1.0, 1.0, 1.0),
-            },
-        )
 
         # custom X-up orientation terms
         setattr(self.rewards, "orientation_x_up_l2", RewTerm(func=stand_orientation_x_up_l2, weight=-30.0))

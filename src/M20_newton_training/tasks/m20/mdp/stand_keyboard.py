@@ -41,7 +41,7 @@ class KeyboardStandVelocityCommand(StandVelocityCommand):
         self._last_keyboard_command = None
         print("[Keyboard] Click the Newton window. I/K: vx, J/L: vy, U/O: wz; release to stop; Backspace: zero.")
 
-    def _resample_command(self, env_ids: Sequence[int]):
+    def _resample_command(self, env_ids: Sequence[int] | torch.Tensor | slice):
         # Called on episode resets and by the command timer. Preserve manual
         # commands instead of invoking the parent's random sampler.
         self.is_standing_env[env_ids] = False

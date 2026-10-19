@@ -9,14 +9,14 @@ from collections.abc import Callable
 
 from isaaclab.terrains import HfRandomUniformTerrainCfg
 from isaaclab.terrains.height_field.hf_terrains import random_uniform_terrain
-from isaaclab.utils import configclass
+from isaaclab.utils import clone, configclass
 
 
 def stand_random_rough_terrain(difficulty: float, cfg: StandRandomRoughTerrainCfg):
     """Use the same noise range for every tile, independent of difficulty."""
     # The upstream generator temporarily changes its config's size. Work on a
     # copy so generating one difficulty cannot affect another terrain tile.
-    return random_uniform_terrain(difficulty, cfg.copy())
+    return random_uniform_terrain(difficulty, clone(cfg))
 
 
 @configclass

@@ -1,24 +1,25 @@
 # Copyright (c) 2025 Deep Robotics
 # SPDX-License-Identifier: BSD 3-Clause
-# 
+#
 # # Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-import torch
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, cast
 
+import torch
+
+from isaaclab.envs.mdp import UniformVelocityCommand, UniformVelocityCommandCfg
 from isaaclab.managers import CommandTerm, CommandTermCfg
 from isaaclab.utils import configclass
 
-import M20_newton_training.tasks.m20.mdp as mdp
-
 if TYPE_CHECKING:
-    from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.envs import ManagerBasedRLEnv
 
 
-class UniformThresholdVelocityCommand(mdp.UniformVelocityCommand):
+class UniformThresholdVelocityCommand(UniformVelocityCommand):
     """Command generator that generates a velocity command in SE(2) from uniform distribution with threshold.
 
     Supports fixed-proportion special-case samples that always use the original (full)
@@ -26,17 +27,17 @@ class UniformThresholdVelocityCommand(mdp.UniformVelocityCommand):
     narrows the command range.
     """
 
-    cfg: mdp.UniformThresholdVelocityCommandCfg
+    cfg: UniformThresholdVelocityCommandCfg
     """The configuration of the command generator."""
 
-    def __init__(self, cfg: mdp.UniformThresholdVelocityCommandCfg, env: ManagerBasedEnv):
+    def __init__(self, cfg: UniformThresholdVelocityCommandCfg, env: ManagerBasedRLEnv):
         super().__init__(cfg, env)
         # Additional metrics for TensorBoard.
         self.metrics["base_z"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["knee_pos"] = torch.zeros(self.num_envs, device=self.device)
         self._metric_step_counter = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
-        knee_joint_ids = self.robot.find_joints(".*[Kk]nee.*")[0]
+        knee_joint_ids = cast(list[int], self.robot.find_joints(".*[Kk]nee.*")[0])
         self._knee_joint_ids = torch.tensor(knee_joint_ids, dtype=torch.long, device=self.device)
 
         # ---- Store original full ranges for special-case sampling ----
@@ -46,38 +47,33 @@ class UniformThresholdVelocityCommand(mdp.UniformVelocityCommand):
         self._full_ranges_lin_vel_y = tuple(cfg.ranges.lin_vel_y)
         self._full_ranges_ang_vel_z = tuple(cfg.ranges.ang_vel_z)
 
-    def reset(self, env_ids: Sequence[int] | None = None) -> dict[str, float]:
+    def reset(self, env_ids: Sequence[int] | torch.Tensor | slice | None = None) -> dict[str, torch.Tensor]:
         if env_ids is None:
             env_ids = slice(None)
 
-        extras = {}
-        for metric_name, metric_value in self.metrics.items():
-            if metric_name in {"base_z", "knee_pos"}:
-                step_count = torch.clamp(self._metric_step_counter[env_ids].float(), min=1.0)
-                extras[metric_name] = torch.mean(metric_value[env_ids] / step_count).item()
-            else:
-                extras[metric_name] = torch.mean(metric_value[env_ids]).item()
-            metric_value[env_ids] = 0.0
-
+        # Finalize our episode means before the parent logs and clears metrics.
+        # The parent also finalizes tracking errors/success and clears its sums.
+        step_count = self._metric_step_counter[env_ids].float().clamp_min(1.0)
+        for metric_name in ("base_z", "knee_pos"):
+            self.metrics[metric_name][env_ids] /= step_count
+        extras = super().reset(cast(Sequence[int], env_ids))
         self._metric_step_counter[env_ids] = 0
-        self.command_counter[env_ids] = 0
-        self._resample(env_ids)
         return extras
 
     def _update_metrics(self):
         super()._update_metrics()
 
         # 1) base_z metric: root_pos_w[:, 2]
-        base_z = self.robot.data.root_pos_w[:, 2]
+        base_z = self.robot.data.root_pos_w.torch[:, 2]
 
         # 2) knee_pos metric: same formulation as joint_pos_penalty for knee joints
         cmd = torch.linalg.norm(self.vel_command_b, dim=1)
-        body_vel = torch.linalg.norm(self.robot.data.root_lin_vel_b[:, :2], dim=1)
+        body_vel = torch.linalg.norm(self.robot.data.root_lin_vel_b.torch[:, :2], dim=1)
 
         if self._knee_joint_ids.numel() > 0:
             running_reward = torch.linalg.norm(
-                self.robot.data.joint_pos[:, self._knee_joint_ids]
-                - self.robot.data.default_joint_pos[:, self._knee_joint_ids],
+                self.robot.data.joint_pos.torch[:, self._knee_joint_ids]
+                - self.robot.data.default_joint_pos.torch[:, self._knee_joint_ids],
                 dim=1,
             )
         else:
@@ -93,8 +89,15 @@ class UniformThresholdVelocityCommand(mdp.UniformVelocityCommand):
         self.metrics["knee_pos"] += knee_pos
         self._metric_step_counter += 1
 
-    def _resample_command(self, env_ids: Sequence[int]):
-        super()._resample_command(env_ids)
+    def _resample_command(self, env_ids: Sequence[int] | torch.Tensor | slice):
+        # Upstream accepts device tensors at runtime but still annotates them as sequences.
+        # Special-command masks index the IDs themselves, so materialize slices
+        # and Python sequences as device indices before applying those masks.
+        if isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device)[env_ids]
+        else:
+            env_ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
+        super()._resample_command(cast(Sequence[int], env_ids))
         # set small commands to zero
         self.vel_command_b[env_ids, :2] *= (torch.norm(self.vel_command_b[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
 
@@ -174,11 +177,12 @@ class UniformThresholdVelocityCommand(mdp.UniformVelocityCommand):
             self.is_standing_env[ids_only_ang] = False
             self.is_heading_env[ids_only_ang] = True
             if self.cfg.heading_command:
+                assert self.cfg.ranges.heading is not None
                 self.heading_target[ids_only_ang] = r_h.uniform_(*self.cfg.ranges.heading)
 
 
 @configclass
-class UniformThresholdVelocityCommandCfg(mdp.UniformVelocityCommandCfg):
+class UniformThresholdVelocityCommandCfg(UniformVelocityCommandCfg):
     """Configuration for the uniform threshold velocity command generator."""
 
     class_type: type = UniformThresholdVelocityCommand
@@ -223,7 +227,7 @@ class DiscreteCommandController(CommandTerm):
     cfg: DiscreteCommandControllerCfg
     """Configuration for the command controller."""
 
-    def __init__(self, cfg: DiscreteCommandControllerCfg, env: ManagerBasedEnv):
+    def __init__(self, cfg: DiscreteCommandControllerCfg, env: ManagerBasedRLEnv):
         """
         Initialize the command controller.
 
@@ -277,13 +281,13 @@ class DiscreteCommandController(CommandTerm):
         """Update metrics for the command controller."""
         pass
 
-    def _resample_command(self, env_ids: Sequence[int]):
+    def _resample_command(self, env_ids: Sequence[int] | torch.Tensor | slice):
         """Resample commands for the given environments."""
         sampled_indices = torch.randint(
-            len(self.available_commands), (len(env_ids),), dtype=torch.int32, device=self.device
+            len(self.available_commands), self.command_buffer[env_ids].shape, dtype=torch.int32, device=self.device
         )
         sampled_commands = torch.tensor(
-            [self.available_commands[idx.item()] for idx in sampled_indices], dtype=torch.int32, device=self.device
+            [self.available_commands[int(idx.item())] for idx in sampled_indices], dtype=torch.int32, device=self.device
         )
         self.command_buffer[env_ids] = sampled_commands
 

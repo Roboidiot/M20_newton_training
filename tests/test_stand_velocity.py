@@ -1,9 +1,12 @@
 """CPU regressions for the upright robot's velocity axes and episode metrics."""
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import torch
+
+from isaaclab.envs import ManagerBasedRLEnv
 
 from M20_newton_training.tasks.m20 import mdp
 from M20_newton_training.tasks.m20.config.M20.flat_env_cfg import DeeproboticsM20FlatEnvCfg
@@ -31,13 +34,16 @@ def _env(linear_velocity, angular_velocity, commands):
     )
     asset = SimpleNamespace(data=data, find_joints=lambda pattern: ([0], ["fl_knee_joint"]))
     commands = torch.tensor(commands, dtype=torch.float32)
-    return SimpleNamespace(
-        num_envs=num_envs,
-        device="cpu",
-        scene={"robot": asset},
-        command_manager=SimpleNamespace(get_command=lambda name: commands),
-        sim=SimpleNamespace(vis_marker_registry=SimpleNamespace(clear_debug_vis_callback=lambda term: None)),
-        extras={"log": {}},
+    return cast(
+        ManagerBasedRLEnv,
+        SimpleNamespace(
+            num_envs=num_envs,
+            device="cpu",
+            scene={"robot": asset},
+            command_manager=SimpleNamespace(get_command=lambda name: commands),
+            sim=SimpleNamespace(vis_marker_registry=SimpleNamespace(clear_debug_vis_callback=lambda term: None)),
+            extras={"log": {}},
+        ),
     )
 
 
@@ -65,7 +71,9 @@ def test_vertical_and_tipping_penalties_use_complementary_axes():
 
 def test_metrics_are_episode_means_and_partial_reset_preserves_other_envs():
     env = _env([[7.0, 0.4, -0.2], [0.0, 3.0, 4.0]], [[0.3, 8.0, 9.0], [0.2, 0.0, 0.0]], [[0.0] * 3] * 2)
-    term = StandVelocityCommand(DeeproboticsM20StandEnvCfg().commands.base_velocity, env)
+    cfg = DeeproboticsM20StandEnvCfg().commands.base_velocity
+    assert isinstance(cfg, StandVelocityCommandCfg)
+    term = StandVelocityCommand(cfg, env)
     term.vel_command_b[:] = torch.tensor([[0.4, -0.2, 0.3], [0.0, 0.0, 0.0]])
     for _ in range(2):
         term._update_metrics()
@@ -90,7 +98,9 @@ def test_metrics_are_episode_means_and_partial_reset_preserves_other_envs():
 
 def test_reset_all_and_next_episode_do_not_reuse_error_history():
     env = _env([[0.0, 3.0, 4.0]], [[0.2, 0.0, 0.0]], [[0.0, 0.0, 0.0]])
-    term = StandVelocityCommand(DeeproboticsM20StandEnvCfg().commands.base_velocity, env)
+    cfg = DeeproboticsM20StandEnvCfg().commands.base_velocity
+    assert isinstance(cfg, StandVelocityCommandCfg)
+    term = StandVelocityCommand(cfg, env)
     term._update_metrics()
     assert term.reset()["error_vel_xy"] == pytest.approx(5.0)
     env.scene["robot"].data.root_lin_vel_b.torch[:] = 0.0
@@ -119,9 +129,11 @@ def test_stand_configuration_selects_correct_functions_and_reduced_commands():
     assert cfg.rewards.ang_vel_xy_l2.func is stand_ang_vel_yz_l2
 
 
-def test_special_samples_include_stopping_translation_and_direct_turning(monkeypatch):
+@pytest.mark.parametrize("env_ids", [slice(None), list(range(5)), torch.arange(5)])
+def test_special_samples_include_stopping_translation_and_direct_turning(monkeypatch, env_ids):
     env = _env([[0.0] * 3] * 5, [[0.0] * 3] * 5, [[0.0] * 3] * 5)
     cfg = DeeproboticsM20StandEnvCfg().commands.base_velocity
+    assert isinstance(cfg, StandVelocityCommandCfg)
     cfg.ranges.lin_vel_x = (0.05, 0.05)
     cfg.ranges.lin_vel_y = (0.04, 0.04)
     cfg.ranges.ang_vel_z = (0.3, 0.3)
@@ -129,7 +141,7 @@ def test_special_samples_include_stopping_translation_and_direct_turning(monkeyp
     # One sample in each disjoint interval. Small single-axis commands must
     # survive the mixed-command threshold, and pure turning must not use heading.
     monkeypatch.setattr(torch, "rand", lambda *args, **kwargs: torch.tensor([0.1, 0.21, 0.23, 0.3, 0.9]))
-    term._resample_command(torch.arange(5))
+    term._resample_command(env_ids)
     term._update_command()
     expected = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.04, 0.0], [0.05, 0.0, 0.0], [0.0, 0.0, 0.3], [0.0, 0.0, 0.3]])
     torch.testing.assert_close(term.command, expected)
@@ -145,3 +157,60 @@ def test_locomotion_tasks_keep_original_command_and_reward_axes(config_type):
     assert cfg.rewards.track_ang_vel_z_exp.func is mdp.track_ang_vel_z_exp
     assert cfg.rewards.lin_vel_z_l2.func is mdp.lin_vel_z_l2
     assert cfg.rewards.ang_vel_xy_l2.func is mdp.ang_vel_xy_l2
+
+
+@pytest.mark.parametrize("command_type", [StandVelocityCommand, mdp.UniformThresholdVelocityCommand])
+@pytest.mark.parametrize("env_ids", [None, slice(None), slice(1, 4, 2), [1, 3], torch.tensor([1, 3])])
+def test_command_reset_accepts_full_and_partial_environment_selectors(command_type, env_ids):
+    env = _env([[0.0, 3.0, 4.0]] * 4, [[0.2, 0.0, 0.0]] * 4, [[0.0] * 3] * 4)
+    cfg_type = DeeproboticsM20StandEnvCfg if command_type is StandVelocityCommand else DeeproboticsM20RoughEnvCfg
+    cfg = cfg_type().commands.base_velocity
+    cfg.debug_vis = False
+    if command_type is StandVelocityCommand:
+        assert isinstance(cfg, StandVelocityCommandCfg)
+        term = StandVelocityCommand(cfg, env)
+    else:
+        assert isinstance(cfg, mdp.UniformThresholdVelocityCommandCfg)
+        term = mdp.UniformThresholdVelocityCommand(cfg, env)
+    term._update_metrics()
+    term._update_metrics()
+    error_before = term._error_xy_sum.clone()
+
+    extras = term.reset(env_ids)
+
+    selected = slice(None) if env_ids is None else env_ids
+    expected_steps = torch.full((4,), 2.0)
+    expected_steps[selected] = 0.0
+    expected_error = error_before.clone()
+    expected_error[selected] = 0.0
+    torch.testing.assert_close(term._step_count, expected_steps)
+    torch.testing.assert_close(term._error_xy_sum, expected_error)
+    assert extras["error_vel_xy"] == pytest.approx(error_before[selected].mean().item() / 2.0)
+    assert extras["base_z"] == pytest.approx(0.8028)
+    torch.testing.assert_close(term.command_counter, (expected_steps == 0).long())
+    assert "Metrics/success_rate" in env.extras["log"]
+    # A second reset before any new steps must not reuse the previous episode.
+    assert term.reset(env_ids)["error_vel_xy"] == 0.0
+
+
+@pytest.mark.parametrize("env_ids", [slice(None), slice(1, 4, 2), slice(0, 0), [1, 3], torch.tensor([1, 3])])
+def test_discrete_command_sampling_respects_environment_selector(env_ids):
+    term = mdp.DiscreteCommandController.__new__(mdp.DiscreteCommandController)
+    term._env = cast(ManagerBasedRLEnv, SimpleNamespace(num_envs=4, device="cpu"))
+    term.available_commands = [10, 20]
+    term.command_buffer = torch.full((4,), -1, dtype=torch.int32)
+    term._resample_command(env_ids)
+    expected_selected = torch.zeros(4, dtype=torch.bool)
+    expected_selected[env_ids] = True
+    torch.testing.assert_close(term.command_buffer != -1, expected_selected)
+    assert torch.isin(term.command_buffer[env_ids], torch.tensor([10, 20])).all()
+
+
+@pytest.mark.parametrize("env_ids", [None, slice(None), slice(1, 4, 2), slice(0, 0), torch.tensor([1, 3])])
+def test_rotation_reward_reset_respects_environment_selector(env_ids):
+    term = mdp.RotationGaitSymmetry.__new__(mdp.RotationGaitSymmetry)
+    term.contact_buffer = torch.ones(4, 2, 3)
+    term.reset(env_ids)
+    expected = torch.ones(4, 2, 3)
+    expected[slice(None) if env_ids is None else env_ids] = 0.0
+    torch.testing.assert_close(term.contact_buffer, expected)

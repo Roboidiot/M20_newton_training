@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
+
+import torch
 
 from isaaclab.assets import RigidObject
 from isaaclab.managers import SceneEntityCfg
@@ -17,7 +18,8 @@ if TYPE_CHECKING:
 
 
 def bad_orientation_2(
-    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")  # type: ignore
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),  # type: ignore
 ) -> torch.Tensor:
     """Terminate when the asset's orientation is too far from the desired orientation limits.
 
@@ -25,4 +27,6 @@ def bad_orientation_2(
     """
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
-    return (asset.data.projected_gravity_b[:, 2] > 0) | (asset.data.projected_gravity_b[:, :2].abs() > 0.7).any(-1)
+    return (asset.data.projected_gravity_b.torch[:, 2] > 0) | (
+        asset.data.projected_gravity_b.torch[:, :2].abs() > 0.7
+    ).any(-1)

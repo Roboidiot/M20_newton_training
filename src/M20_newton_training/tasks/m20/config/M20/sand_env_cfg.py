@@ -14,12 +14,14 @@ treats rigid geometry as colliders. The robot reaches the sand through a directe
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import numpy as np
 from isaaclab_contrib.coupling import CouplerEntryCfg, CouplerProxyCfg, CouplerProxyMappingCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObjectCfg
+from isaaclab.physics import PhysicsCfg
 from isaaclab.sim.schemas import UsdPhysicsRigidBodyCfg
 from isaaclab.sim.spawners.materials import RigidBodyMaterialBaseCfg
 from isaaclab.utils import configclass
@@ -283,12 +285,19 @@ class DeeproboticsM20SandEnvCfg(DeeproboticsM20RoughEnvCfg):
         # The parent populates self.scene (robot, scanner prim paths, rewards) on the instance above.
         super().__post_init__()
 
+        reset_pose_range = cast(
+            dict[str, tuple[float, float]],
+            self.events.randomize_reset_base.params["pose_range"],
+        )
+        reset_pose_range["x"] = (0.0, 0.0)
+        reset_pose_range["y"] = (0.0, 0.0)
+
         # The sand patch replaces procedural roughness: a flat plane under a granular layer.
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
         self.curriculum.terrain_levels = None
 
-        self.sim.physics = M20SandPhysicsCfg()
+        self.sim.physics = cast(PhysicsCfg, M20SandPhysicsCfg())
 
         # The bed surface is itself the quantity that moves, so no terrain-relative height target.
         self.rewards.base_height_l2.params["sensor_cfg"] = None

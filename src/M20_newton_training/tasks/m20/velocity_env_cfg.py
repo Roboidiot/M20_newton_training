@@ -9,23 +9,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import inspect
 import math
 import sys
+from collections.abc import Callable
 from dataclasses import MISSING
+from typing import cast
+
+from torch import Tensor
+
 import isaaclab.sim as sim_utils
-from isaaclab.physics import PhysxAutoCfg
-from isaaclab.sim import SimulationCfg
-from isaaclab_newton.physics import (
-    KaminoPADMMSolverCfg,
-    MJWarpSolverCfg,
-    NewtonCfg,
-    NewtonCollisionPipelineCfg,
-    NewtonShapeCfg,
-)
-from isaaclab_ov.physics import OvPhysxCfg
-from isaaclab_physx.physics import PhysxCfg
-from isaaclab_tasks.utils import PresetCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
@@ -35,14 +27,30 @@ from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.physics import PhysicsCfg, PhysxAutoCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.sim import SimulationCfg
+from isaaclab.sim.spawners.materials import RigidBodyMaterialBaseCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import UniformNoiseCfg as Unoise
+from isaaclab_newton.physics import (
+    KaminoPADMMSolverCfg,
+    MJWarpSolverCfg,
+    NewtonCfg,
+    NewtonCollisionPipelineCfg,
+    NewtonShapeCfg,
+)
+from isaaclab_ov.physics import OvPhysxCfg
+from isaaclab_physx.physics import PhysxCfg
+from isaaclab_physx.sim.spawners.materials import PhysxRigidBodyMaterialCfg
+
+from isaaclab_tasks.utils import PresetCfg
 
 import M20_newton_training.tasks.m20.mdp as mdp
+from M20_newton_training.tasks.m20.mdp.stand_commands import StandVelocityCommandCfg
 
 ##
 # Pre-defined configs
@@ -96,7 +104,7 @@ class MySceneCfg(InteractiveSceneCfg):
         terrain_generator=ROUGH_TERRAINS_CFG,
         max_init_terrain_level=5,
         collision_group=-1,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
+        physics_material=PhysxRigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
             static_friction=1.0,
@@ -111,13 +119,13 @@ class MySceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
     # robots
-    robot: ArticulationCfg = MISSING
+    robot: ArticulationCfg = cast(ArticulationCfg, MISSING)
     # sensors
-    height_scanner = RayCasterCfg(
+    height_scanner: RayCasterCfg | None = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(1.6, 1.0)),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
         global_world_only=True,
@@ -131,7 +139,9 @@ class MySceneCfg(InteractiveSceneCfg):
         mesh_prim_paths=["/World/ground"],
         global_world_only=True,
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/[^/]*", history_length=3, track_air_time=True)
+    contact_forces: ContactSensorCfg | None = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/[^/]*", history_length=3, track_air_time=True
+    )
     # lights
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
@@ -151,17 +161,19 @@ class MySceneCfg(InteractiveSceneCfg):
 class CommandsCfg:
     """Command specifications for the MDP."""
 
-    base_velocity = mdp.UniformThresholdVelocityCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(10.0, 10.0),
-        rel_standing_envs=0.3,
-        rel_heading_envs=1.0,
-        heading_command=True,
-        heading_control_stiffness=0.5,
-        debug_vis=True,
-        ranges=mdp.UniformThresholdVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
-        ),
+    base_velocity: mdp.UniformThresholdVelocityCommandCfg | StandVelocityCommandCfg = (
+        mdp.UniformThresholdVelocityCommandCfg(
+            asset_name="robot",
+            resampling_time_range=(10.0, 10.0),
+            rel_standing_envs=0.3,
+            rel_heading_envs=1.0,
+            heading_command=True,
+            heading_control_stiffness=0.5,
+            debug_vis=True,
+            ranges=mdp.UniformThresholdVelocityCommandCfg.Ranges(
+                lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            ),
+        )
     )
 
 
@@ -183,7 +195,7 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         # observation terms (order preserved)
-        base_lin_vel = ObsTerm(
+        base_lin_vel: ObsTerm | None = ObsTerm(
             func=mdp.base_lin_vel,
             noise=Unoise(n_min=-0.1, n_max=0.1),
             clip=(-100.0, 100.0),
@@ -226,7 +238,7 @@ class ObservationsCfg:
             clip=(-100.0, 100.0),
             scale=1.0,
         )
-        height_scan = ObsTerm(
+        height_scan: ObsTerm | None = ObsTerm(
             func=mdp.height_scan,
             params={"sensor_cfg": SceneEntityCfg("height_scanner")},
             noise=Unoise(n_min=-0.1, n_max=0.1),
@@ -243,7 +255,7 @@ class ObservationsCfg:
         """Observations for critic group."""
 
         # observation terms (order preserved)
-        base_lin_vel = ObsTerm(
+        base_lin_vel: ObsTerm | None = ObsTerm(
             func=mdp.base_lin_vel,
             clip=(-100.0, 100.0),
             scale=1.0,
@@ -281,7 +293,7 @@ class ObservationsCfg:
             clip=(-100.0, 100.0),
             scale=1.0,
         )
-        height_scan = ObsTerm(
+        height_scan: ObsTerm | None = ObsTerm(
             func=mdp.height_scan,
             params={"sensor_cfg": SceneEntityCfg("height_scanner")},
             clip=(-1.0, 1.0),
@@ -306,9 +318,10 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
 
+    # EventManager accepts ManagerTermBase classes; its func annotation only lists callables returning None.
     # startup
     randomize_rigid_body_material = EventTerm(
-        func=mdp.randomize_rigid_body_material,
+        func=cast(Callable[..., None], mdp.randomize_rigid_body_material),
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
@@ -320,7 +333,7 @@ class EventCfg:
     )
 
     randomize_rigid_body_mass = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
+        func=cast(Callable[..., None], mdp.randomize_rigid_body_mass),
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=""),
@@ -331,7 +344,7 @@ class EventCfg:
     )
 
     randomize_rigid_body_mass_base = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
+        func=cast(Callable[..., None], mdp.randomize_rigid_body_mass),
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=""),
@@ -342,7 +355,7 @@ class EventCfg:
     )
 
     randomize_rigid_body_inertia = EventTerm(
-        func=mdp.randomize_rigid_body_inertia,
+        func=cast(Callable[..., None], mdp.randomize_rigid_body_inertia),
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
@@ -352,7 +365,7 @@ class EventCfg:
     )
 
     randomize_com_positions = EventTerm(
-        func=mdp.randomize_rigid_body_com,
+        func=cast(Callable[..., None], mdp.randomize_rigid_body_com),
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
@@ -361,7 +374,7 @@ class EventCfg:
     )
 
     # reset
-    randomize_apply_external_force_torque = EventTerm(
+    randomize_apply_external_force_torque: EventTerm | None = EventTerm(
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
@@ -382,7 +395,7 @@ class EventCfg:
     )
 
     randomize_actuator_gains = EventTerm(
-        func=mdp.randomize_actuator_gains,
+        func=cast(Callable[..., None], mdp.randomize_actuator_gains),
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
@@ -394,7 +407,7 @@ class EventCfg:
     )
 
     randomize_reset_base = EventTerm(
-        func=mdp.reset_root_state_uniform,
+        func=cast(Callable[..., None], mdp.reset_root_state_uniform),
         mode="reset",
         params={
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
@@ -410,7 +423,7 @@ class EventCfg:
     )
 
     # interval
-    randomize_push_robot = EventTerm(
+    randomize_push_robot: EventTerm | None = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
         interval_range_s=(10.0, 15.0),
@@ -456,11 +469,11 @@ class RewardsCfg:
     )
 
     joint_deviation_l1 = RewTerm(
-            func=mdp.joint_deviation_l1,
-            weight=0.0,
-            params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
-        )
-    
+        func=mdp.joint_deviation_l1,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
+    )
+
     def create_joint_deviation_l1_rewterm(self, attr_name, weight, joint_names_pattern):
         rew_term = RewTerm(
             func=mdp.joint_deviation_l1,
@@ -543,9 +556,6 @@ class RewardsCfg:
         },
     )
 
-
-
-
     wheel_vel_penalty = RewTerm(
         func=mdp.wheel_vel_penalty,
         weight=0.0,
@@ -625,7 +635,7 @@ class RewardsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
             "speed_threshold": 0.10,
-        }
+        },
     )
 
     # Velocity-tracking rewards
@@ -710,7 +720,7 @@ class RewardsCfg:
     )
 
     feet_gait = RewTerm(
-        func=mdp.GaitReward,
+        func=cast(Callable[..., Tensor], mdp.GaitReward),
         weight=0.0,
         params={
             "std": math.sqrt(0.5),
@@ -734,16 +744,16 @@ class RewardsCfg:
             "command_threshold": 0.1,
             "cycle_time": 0.425,  # 一个完整步态周期时长（秒）
             "phase_offsets": (0.0, 1.0, 1.0, 0.0),
-            "gait_span": -0.00,    # x 方向摆动半跨度（米），符号决定前后扫动方向
-            "gait_psi": 0.05,   # 摆动抬脚高度尺度（米）
-            "gait_delta": 0.02, # z 方向轨迹偏置（米）
-            "x_offset": 0.0,    # 轨迹整体 x 偏移（米）
-            "stance_span": 0.0, # 支撑相在 S∈[0,2) 中占据的长度
-            "stand_ref_z_offset": -0.0, # 基准站立足端参考在 body-z 的偏置（米）
-            "velocity_weight": 0.0, # 速度误差在总误差中的权重
+            "gait_span": -0.00,  # x 方向摆动半跨度（米），符号决定前后扫动方向
+            "gait_psi": 0.05,  # 摆动抬脚高度尺度（米）
+            "gait_delta": 0.02,  # z 方向轨迹偏置（米）
+            "x_offset": 0.0,  # 轨迹整体 x 偏移（米）
+            "stance_span": 0.0,  # 支撑相在 S∈[0,2) 中占据的长度
+            "stand_ref_z_offset": -0.0,  # 基准站立足端参考在 body-z 的偏置（米）
+            "velocity_weight": 0.0,  # 速度误差在总误差中的权重
         },
     )
-    
+
     feet_contact = RewTerm(
         func=mdp.feet_contact,
         weight=0.0,
@@ -799,7 +809,7 @@ class RewardsCfg:
             "command_name": "base_velocity",
             "asset_cfg": SceneEntityCfg("robot", joint_names=""),
         },
-    ) # negetive
+    )  # negetive
 
     feet_height = RewTerm(
         func=mdp.feet_height,
@@ -872,7 +882,7 @@ class RewardsCfg:
     )
 
     rotation_gait_symmetry = RewTerm(
-        func=mdp.RotationGaitSymmetry,
+        func=cast(Callable[..., Tensor], mdp.RotationGaitSymmetry),
         weight=0.0,
         params={
             "command_name": "base_velocity",
@@ -892,6 +902,7 @@ class RewardsCfg:
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
 
+
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
@@ -906,26 +917,23 @@ class TerminationsCfg:
     )
 
     # Contact sensor
-    illegal_contact = DoneTerm(
+    illegal_contact: DoneTerm | None = DoneTerm(
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=""), "threshold": 1.0},
     )
 
     bad_orientation_2 = DoneTerm(func=mdp.bad_orientation_2)
-    
-
-
 
 
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
-    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
-    gait_level = CurrTerm(func=mdp.gait_level_curve)
+    terrain_levels: CurrTerm | None = CurrTerm(func=cast(Callable[..., float], mdp.terrain_levels_vel))
+    gait_level: CurrTerm | None = CurrTerm(func=cast(Callable[..., float], mdp.gait_level_curve))
 
-    command_levels = CurrTerm(
-        func=mdp.command_levels_vel,
+    command_levels: CurrTerm | None = CurrTerm(
+        func=cast(Callable[..., float], mdp.command_levels_vel),
         params={
             "reward_term_name": "track_lin_vel_xy_exp",
             "range_multiplier": (0.1, 1.0),
@@ -943,7 +951,8 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
 
     # Simulation settings — shared physics preset (PhysX + Newton) for the M20 environment
-    sim: SimulationCfg = SimulationCfg(physics=M20PhysicsCfg())
+    # Presets are resolved to PhysicsCfg by the CLI before constructing SimulationContext.
+    sim: SimulationCfg = SimulationCfg(physics=cast(PhysicsCfg, M20PhysicsCfg()))
     # Scene settings
     scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -964,7 +973,7 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
-        self.sim.physics_material = self.scene.terrain.physics_material
+        self.sim.physics_material = cast(RigidBodyMaterialBaseCfg, self.scene.terrain.physics_material)
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         if self.scene.height_scanner is not None:
@@ -1001,7 +1010,7 @@ def create_obsgroup_class(class_name, terms, enable_corruption=False, concatenat
     :return: The dynamically created class.
     """
     # Dynamically determine the module name
-    module_name = inspect.getmodule(inspect.currentframe()).__name__
+    module_name = __name__
 
     # Define the post-init function
     def post_init_wrapper(self):

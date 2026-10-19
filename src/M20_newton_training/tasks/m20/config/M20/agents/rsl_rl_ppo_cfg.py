@@ -12,7 +12,7 @@ from isaaclab_rl.rsl_rl import RslRlMLPModelCfg, RslRlOnPolicyRunnerCfg, RslRlPp
 @configclass
 class DeeproboticsM20RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 20000
+    max_iterations = 5000
     save_interval = 100
     experiment_name = "deeprobotics_m20_rough"
     obs_groups = {"actor": ["policy"], "critic": ["critic"]}
@@ -42,6 +42,9 @@ class DeeproboticsM20RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+    def __post_init__(self):
+        """Hook for robot-specific runner settings; configclass handles field copying."""
 
 
 @configclass

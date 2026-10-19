@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Deep Robotics
 # SPDX-License-Identifier: BSD 3-Clause
-# 
+#
 # # Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,28 +12,32 @@ the curriculum introduced by the function.
 
 from __future__ import annotations
 
-import torch
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+import torch
 
 from isaaclab.assets import Articulation
+from isaaclab.envs.mdp import UniformVelocityCommand
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.terrains import TerrainImporter
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
 def terrain_levels_vel(
-    env: ManagerBasedRLEnv, env_ids: Sequence[int], asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    env: ManagerBasedRLEnv, env_ids: torch.Tensor, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
     """Terrain curriculum with synchronized global gait_level update."""
     asset: Articulation = env.scene[asset_cfg.name]
-    terrain: TerrainImporter = env.scene.terrain
+    terrain = env.scene.terrain
+    assert terrain is not None
+    generator = terrain.cfg.terrain_generator
+    assert generator is not None
     command = env.command_manager.get_command("base_velocity")
 
-    distance = torch.norm(asset.data.root_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1)
-    move_up = distance > terrain.cfg.terrain_generator.size[0] / 2
+    distance = torch.norm(asset.data.root_pos_w.torch[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1)
+    move_up = distance > generator.size[0] / 2
     move_down = distance < torch.norm(command[env_ids, :2], dim=1) * env.max_episode_length_s * 0.5
     move_down *= ~move_up
 
@@ -47,7 +51,7 @@ def terrain_levels_vel(
     return mean_level
 
 
-def gait_level_curve(env: ManagerBasedRLEnv, env_ids: Sequence[int]) -> torch.Tensor:
+def gait_level_curve(env: ManagerBasedRLEnv, env_ids: torch.Tensor) -> torch.Tensor:
     """Return current global gait_level for logging in curriculum curves."""
     from .rewards import gait_level
 
@@ -56,24 +60,30 @@ def gait_level_curve(env: ManagerBasedRLEnv, env_ids: Sequence[int]) -> torch.Te
 
 def command_levels_vel(
     env: ManagerBasedRLEnv,
-    env_ids: Sequence[int],
+    env_ids: torch.Tensor,
     reward_term_name: str,
     range_multiplier: Sequence[float] = (0.1, 1.0),
-) -> None:
-    """command_levels_vel"""
-    base_velocity_ranges = env.command_manager.get_term("base_velocity").cfg.ranges
+) -> torch.Tensor:
+    """Expand command ranges when episode tracking rewards exceed the threshold."""
+    base_velocity = cast(UniformVelocityCommand, env.command_manager.get_term("base_velocity"))
+    base_velocity_ranges = base_velocity.cfg.ranges
     # Get original velocity ranges (ONLY ON FIRST EPISODE)
     if env.common_step_counter == 0:
-        env._original_vel_x = torch.tensor(base_velocity_ranges.lin_vel_x, device=env.device)
-        env._original_vel_y = torch.tensor(base_velocity_ranges.lin_vel_y, device=env.device)
-        env._initial_vel_x = env._original_vel_x * range_multiplier[0]
-        env._final_vel_x = env._original_vel_x * range_multiplier[1]
-        env._initial_vel_y = env._original_vel_y * range_multiplier[0]
-        env._final_vel_y = env._original_vel_y * range_multiplier[1]
-
-        # Initialize command ranges to initial values
-        base_velocity_ranges.lin_vel_x = env._initial_vel_x.tolist()
-        base_velocity_ranges.lin_vel_y = env._initial_vel_y.tolist()
+        original_x = torch.tensor(base_velocity_ranges.lin_vel_x, device=env.device)
+        original_y = torch.tensor(base_velocity_ranges.lin_vel_y, device=env.device)
+        initial_x = original_x * range_multiplier[0]
+        initial_y = original_y * range_multiplier[0]
+        for name, value in {
+            "_original_vel_x": original_x,
+            "_original_vel_y": original_y,
+            "_initial_vel_x": initial_x,
+            "_initial_vel_y": initial_y,
+            "_final_vel_x": original_x * range_multiplier[1],
+            "_final_vel_y": original_y * range_multiplier[1],
+        }.items():
+            setattr(env, name, value)
+        base_velocity_ranges.lin_vel_x = tuple(initial_x.tolist())
+        base_velocity_ranges.lin_vel_y = tuple(initial_y.tolist())
 
     # avoid updating command curriculum at each step since the maximum command is common to all envs
     if env.common_step_counter % env.max_episode_length == 0:
@@ -86,12 +96,15 @@ def command_levels_vel(
             new_vel_x = torch.tensor(base_velocity_ranges.lin_vel_x, device=env.device) + delta_command
             new_vel_y = torch.tensor(base_velocity_ranges.lin_vel_y, device=env.device) + delta_command
 
+            final_x = getattr(env, "_final_vel_x", None)
+            final_y = getattr(env, "_final_vel_y", None)
+            assert isinstance(final_x, torch.Tensor) and isinstance(final_y, torch.Tensor)
             # Clamp to ensure we don't exceed final ranges
-            new_vel_x = torch.clamp(new_vel_x, min=env._final_vel_x[0], max=env._final_vel_x[1])
-            new_vel_y = torch.clamp(new_vel_y, min=env._final_vel_y[0], max=env._final_vel_y[1])
+            new_vel_x = torch.clamp(new_vel_x, min=final_x[0], max=final_x[1])
+            new_vel_y = torch.clamp(new_vel_y, min=final_y[0], max=final_y[1])
 
             # Update ranges
-            base_velocity_ranges.lin_vel_x = new_vel_x.tolist()
-            base_velocity_ranges.lin_vel_y = new_vel_y.tolist()
+            base_velocity_ranges.lin_vel_x = tuple(new_vel_x.tolist())
+            base_velocity_ranges.lin_vel_y = tuple(new_vel_y.tolist())
 
     return torch.tensor(base_velocity_ranges.lin_vel_x[1], device=env.device)

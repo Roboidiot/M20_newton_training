@@ -97,10 +97,10 @@ uv run isaaclab play --rl_library rsl_rl --task M20NewtonTraining-M20-M20-Stand 
   --checkpoint latest physics=newton_mjwarp --visualizer newton --num_envs 1 --real-time
 ```
 
-Click the Newton window to focus it. Hold `I/K` for positive/negative `vx` (body Y, 0.5 m/s),
-`J/L` for positive/negative `vy` (body Z, 0.25 m/s), and `U/O` for positive/negative `wz`
-(body X, 0.5 rad/s). Releasing a key stops that command axis; holding Backspace forces all commands
-to zero. These speeds are half of each configured command range's maximum magnitude. Space pauses
+Click the Newton window to focus it. Hold `J/L` for positive/negative `vx` (body Y, 0.75 m/s),
+`I/K` for positive/negative `vy` (body Z, 0.375 m/s), and `U/O` for positive/negative `wz`
+(body X, 0.75 rad/s). Releasing a key stops that command axis; holding Backspace forces all commands
+to zero. These speeds are 75% of each configured command range's maximum magnitude. Space pauses
 the viewer, and WASD/arrow keys retain their camera controls. Closing the window exits playback.
 For automatic random commands during play, add `--train_env_cfg` to bypass the play-mode switch.
 The training command generator and policy input dimensions are unchanged.
@@ -134,6 +134,23 @@ The setup command selects the active interpreter and generates a git-ignored `py
 configuration inherits the project's checked-in Pyright settings and adds the Isaac Sim extensions, project `src` root,
 and any Isaac Lab packages discovered in the active Python environment. This supports both Pylance in VS Code and
 basedpyright in Cursor.
+
+The checked-in Pyright settings use Python 3.12 and this project's `.venv`, and check `src`, `scripts`,
+`tests`, and `mojuco_sim` in `basic` mode. To repeat the command-line check from this directory:
+
+```bash
+npx --yes pyright@1.1.414
+```
+
+The local `typings/mujoco/__init__.pyi` describes the public binary bindings used by the CPU replay tool;
+the installed MuJoCo wheel does not ship declarations for those exports. It has no runtime effect.
+Isaac Lab configuration copies use `isaaclab.utils.replace`/`clone` so their types remain visible to Pylance.
+Callable event classes and physics presets retain their runtime behavior, with casts at the upstream boundaries
+whose annotations do not describe these supported inputs.
+
+When opening the parent workspace instead of this package directory, its `pyrightconfig.json` should inherit
+`./M20_newton_training/pyrightconfig.json`. Both workspace levels must use this package's `.venv/bin/python`.
+After changing interpreters or upgrading Isaac Lab, run **Python: Restart Language Server** in VS Code.
 
 In VS Code, use Pylance and select the interpreter that ran the setup command. In Cursor, install the
 [basedpyright extension](https://marketplace.visualstudio.com/items?itemName=detachhead.basedpyright) instead of

@@ -1,11 +1,13 @@
 """Wheel masking must follow joint identity across observation permutations."""
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import torch
 import warp as wp
 
+from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.string import resolve_matching_names
 from isaaclab.utils.warp import ProxyArray
@@ -38,7 +40,7 @@ def _env(names):
             default_joint_pos=ProxyArray(wp.from_torch(defaults)),
         ),
     )
-    return SimpleNamespace(scene={"robot": asset}), positions, defaults, offsets
+    return cast(ManagerBasedEnv, SimpleNamespace(scene={"robot": asset})), positions, defaults, offsets
 
 
 def _expected(offsets, native_names, selected_names):
