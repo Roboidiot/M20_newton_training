@@ -14,17 +14,22 @@ treats rigid geometry as colliders. The robot reaches the sand through a directe
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import cast
 
 import numpy as np
 from isaaclab_contrib.coupling import CouplerEntryCfg, CouplerProxyCfg, CouplerProxyMappingCfg
+from torch import Tensor
 
+import isaaclab.envs.mdp as base_mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObjectCfg
+from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.physics import PhysicsCfg
 from isaaclab.sim.schemas import UsdPhysicsRigidBodyCfg
 from isaaclab.sim.spawners.materials import RigidBodyMaterialBaseCfg
-from isaaclab.utils import configclass
+from isaaclab.utils import configclass, replace
 from isaaclab_newton.assets import MPMObjectCfg
 from isaaclab_newton.physics import (
     MJWarpSolverCfg,
@@ -36,21 +41,30 @@ from isaaclab_newton.physics import (
 from isaaclab_newton.sim.schemas import NewtonCollisionPropertiesCfg
 from isaaclab_newton.sim.spawners.mpm import MPMGridCfg, MPMParticleMaterialCfg
 
+from M20_newton_training.tasks.m20.mdp.keyboard_velocity import KeyboardVelocityCommandCfg
+from M20_newton_training.tasks.m20.mdp.sand_rewards import (
+    SandActionSmoothness,
+    SandDiagonalStepReward,
+    SandStepCompletionReward,
+    SandSupportMotionPenalty,
+    sand_stand_still,
+    sand_wheel_velocity_l2,
+)
 from M20_newton_training.tasks.m20.velocity_env_cfg import M20PhysicsCfg, MySceneCfg
 
-from .rough_env_cfg import DeeproboticsM20RoughEnvCfg
+from .rough_env_cfg import DeeproboticsM20RewardsCfg, DeeproboticsM20RoughEnvCfg
 
 ##
 # Sand bed geometry
 ##
 
-SAND_HALF_EXTENT_XY = 0.9
+SAND_HALF_EXTENT_XY = 1.2
 """Half side length of the square sand patch [m], measured to the inner face of the tray walls."""
 
-SAND_DEPTH = 0.12
+SAND_DEPTH = 0.20
 """Undisturbed sand layer thickness [m]."""
 
-SAND_VOXEL_SIZE = 0.05
+SAND_VOXEL_SIZE = 0.02
 """MPM grid voxel size [m]. Keep it comparable to the contact patch of a wheel, not to the whole robot."""
 
 SAND_PARTICLES_PER_CELL = 1.0
@@ -73,6 +87,12 @@ SAND_WALL_HEIGHT = SAND_DEPTH + 0.2
 
 SAND_NUM_ENVS = 64
 """Default parallel environments. MPM cost scales with ``num_envs * particles_per_env``."""
+
+SAND_ENV_SPACING = 2.0 * (SAND_HALF_EXTENT_XY + SAND_WALL_THICKNESS) + 1.0
+"""Environment-center spacing [m], leaving a 1 m gap between the tray exteriors."""
+
+SAND_BASE_CLEARANCE = 0.58
+"""Initial base-link height above the undeformed sand generation box [m]."""
 
 RIGID_ENTRY = "robot"
 MPM_ENTRY = "sand"
@@ -276,14 +296,85 @@ class M20SandPhysicsCfg(M20PhysicsCfg):
 
 
 @configclass
+class DeeproboticsM20SandRewardsCfg(DeeproboticsM20RewardsCfg):
+    """Kinematic stepping rewards; no contact sensor, policy phase, or gait_level multiplier."""
+
+    sand_diagonal_steps = RewTerm(
+        func=cast(Callable[..., Tensor], SandDiagonalStepReward),
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel"], preserve_order=True
+            ),
+            "command_name": "base_velocity",
+            "target_lift": 0.07,
+            "height_std": 0.035,
+            "sync_std": 0.025,
+        },
+    )
+    sand_step_completion = RewTerm(
+        func=cast(Callable[..., Tensor], SandStepCompletionReward),
+        weight=0.5,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel"], preserve_order=True
+            ),
+            "command_name": "base_velocity",
+            "lift_threshold": 0.035,
+            "lower_threshold": 0.01,
+            "target_lift": 0.07,
+            "min_stride": 0.06,
+            "min_swing_time": 0.08,
+            "max_swing_time": 0.8,
+        },
+    )
+    sand_support_motion = RewTerm(
+        func=cast(Callable[..., Tensor], SandSupportMotionPenalty),
+        weight=-0.2,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot", body_names=["fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel"], preserve_order=True
+            ),
+            "support_threshold": 0.01,
+            "velocity_reference": 0.5,
+        },
+    )
+    sand_wheel_velocity = RewTerm(
+        func=sand_wheel_velocity_l2,
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*_wheel_joint"), "velocity_reference": 5.0},
+    )
+
+
+@configclass
 class DeeproboticsM20SandEnvCfg(DeeproboticsM20RoughEnvCfg):
     """Velocity-tracking locomotion on a deformable sand bed for the M20 wheeled quadruped."""
 
-    scene: DeeproboticsM20SandSceneCfg = DeeproboticsM20SandSceneCfg(num_envs=SAND_NUM_ENVS, env_spacing=3.0)
+    scene: DeeproboticsM20SandSceneCfg = DeeproboticsM20SandSceneCfg(
+        num_envs=SAND_NUM_ENVS, env_spacing=SAND_ENV_SPACING
+    )
+    rewards: DeeproboticsM20SandRewardsCfg = DeeproboticsM20SandRewardsCfg()
 
     def __post_init__(self):
         # The parent populates self.scene (robot, scanner prim paths, rewards) on the instance above.
         super().__post_init__()
+
+        # Use the generated layer height, which can be rounded down from SAND_DEPTH to whole particle layers.
+        sand_grid = self.scene.sand.spawn
+        if not isinstance(sand_grid, MPMGridCfg):
+            raise TypeError("Sand initialization requires an MPMGridCfg particle bed.")
+        robot_cfg = self.scene.robot
+        self.scene.robot = replace(
+            robot_cfg,
+            init_state=replace(
+                robot_cfg.init_state,
+                pos=(
+                    robot_cfg.init_state.pos[0],
+                    robot_cfg.init_state.pos[1],
+                    float(sand_grid.upper[2]) + SAND_BASE_CLEARANCE - 0.1,
+                ),
+            ),
+        )
 
         reset_pose_range = cast(
             dict[str, tuple[float, float]],
@@ -291,13 +382,39 @@ class DeeproboticsM20SandEnvCfg(DeeproboticsM20RoughEnvCfg):
         )
         reset_pose_range["x"] = (0.0, 0.0)
         reset_pose_range["y"] = (0.0, 0.0)
+        reset_pose_range["roll"] = (-0.1, 0.1)
+        reset_pose_range["pitch"] = (-0.1, 0.1)
 
         # The sand patch replaces procedural roughness: a flat plane under a granular layer.
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
         self.curriculum.terrain_levels = None
+        self.curriculum.gait_level = None
 
         self.sim.physics = cast(PhysicsCfg, M20SandPhysicsCfg())
+
+        # Keep effort/smoothness regularization active independently of Rough's global curriculum scalar.
+        self.rewards.joint_torques_l2.func = base_mdp.joint_torques_l2
+        self.rewards.action_rate_l2.func = base_mdp.action_rate_l2
+        self.rewards.action_smooth_l2.func = cast(Callable[..., Tensor], SandActionSmoothness)
+        # Foot-space diagonal coordination replaces the inherited raw joint-angle mirror penalty.
+        self.rewards.joint_mirror.weight = 0.0
+
+        # Allow stepping away from the default pose; retain a mild hold penalty at zero command.
+        self.rewards.hipx_joint_pos_penalty.weight = -0.3
+        self.rewards.hipy_joint_pos_penalty.weight = -0.15
+        self.rewards.knee_joint_pos_penalty.weight = -0.075
+        self.rewards.flat_orientation_l2.weight = -5.0
+        self.rewards.ang_vel_xy_l2.weight = -0.05
+        self.rewards.bad_orientation_penalty.weight = 0.0
+        self.rewards.track_ang_vel_z_exp.weight = 1.5
+        self.rewards.track_lin_vel_xy_exp.weight = 3.0
+        self.rewards.stand_still.func = sand_stand_still
+        self.rewards.stand_still.weight = -0.1
+        self.rewards.stand_still.params = {
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=self.leg_joint_names, preserve_order=True),
+        }
 
         # The bed surface is itself the quantity that moves, so no terrain-relative height target.
         self.rewards.base_height_l2.params["sensor_cfg"] = None
@@ -320,3 +437,15 @@ class DeeproboticsM20SandEnvCfg(DeeproboticsM20RoughEnvCfg):
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "DeeproboticsM20SandEnvCfg":
             self.disable_zero_weight_rewards()
+
+    def play_mode(self):
+        """Use body-frame keyboard velocities for playback; training retains random commands."""
+        super().play_mode()
+        self.scene.num_envs = 1
+        command = self.commands.base_velocity
+        self.commands.base_velocity = KeyboardVelocityCommandCfg(
+            asset_name=command.asset_name,
+            ranges=replace(command.ranges),
+            debug_vis=command.debug_vis,
+            keyboard_speeds=(0.5, 0.3, 0.5),
+        )

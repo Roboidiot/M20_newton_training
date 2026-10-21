@@ -25,6 +25,17 @@ gym.register(
 )
 
 gym.register(
+    id="M20NewtonTraining-M20-M20-Walk",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.walk_env_cfg:DeeproboticsM20WalkEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DeeproboticsM20WalkPPORunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)
+
+gym.register(
     id="M20NewtonTraining-M20-M20-Rough",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

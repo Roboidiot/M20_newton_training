@@ -66,8 +66,9 @@ def update_gait_level_from_terrain_mean(terrain_level_mean: float | torch.Tensor
 
 
 def get_gait_level_tensor(env: ManagerBasedRLEnv) -> torch.Tensor:
-    """Return global gait_level as tensor matching environment batch size."""
-    return torch.full((env.num_envs,), gait_level, device=env.device)
+    """Use a task-local fixed level when configured, otherwise the terrain curriculum's global level."""
+    level = getattr(getattr(env, "cfg", None), "reward_gait_level", None)
+    return torch.full((env.num_envs,), gait_level if level is None else level, device=env.device)
 
 
 def track_lin_vel_xy_exp(

@@ -5,6 +5,7 @@ An installable downstream Isaac Lab task package generated with a standard uv `s
 The registered tasks are:
 
 - `M20NewtonTraining-M20-M20-Flat`
+- `M20NewtonTraining-M20-M20-Walk`
 - `M20NewtonTraining-M20-M20-Rough`
 - `M20NewtonTraining-M20-M20-Sand`
 - `M20NewtonTraining-M20-M20-Stand`
@@ -12,9 +13,41 @@ The registered tasks are:
 The M20 wheeled robot model lives in `deep_robotics_model/M20/` (USD, URDF, and MJCF), referenced by the
 `DEEPROBOTICS_M20_CFG` articulation in `src/M20_newton_training/assets/deeprobotics.py`.
 
+`M20NewtonTraining-M20-M20-Walk` uses Flat's plane, 57-dimensional actor observation, 60-dimensional critic
+observation, 16 actions, command distribution, and PPO networks. It replaces the turn-only air-time reward
+with touchdown air-time credit (weight +10, reference 0.2 s, capped at 0.5 s). Commands above 0.1 m/s laterally
+double this term, commands above 0.1 rad/s in yaw triple it, and combined side/turn commands quadruple it;
+zero commands disable the term. Shorter-than-reference air times give negative credit, amplified by the same
+factors. Actual wheel-speed mean square (wheel speeds in rad/s) is penalized at -0.2, multiplied by five for any turning
+command. Other reward weights match Flat. Walk sets a task-local reward gait level of 1 and disables the
+terrain/gait curricula, so the inherited gait-scaled rewards stay active without modifying sibling tasks.
+These rewards encourage stepping without imposing a clock or removing wheel actions; gait quality requires
+training and playback validation.
+
+```bash
+uv run isaaclab train --rl_library rsl_rl --task M20NewtonTraining-M20-M20-Walk \
+  --num_envs 2048 --logger tensorboard physics=newton_mjwarp
+uv run tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk --port 6006
+```
+
 `M20NewtonTraining-M20-M20-Sand` puts each environment on a granular bed advanced by Newton's implicit MPM
 solver, coupled to the rigid robot solve. It therefore requires the Newton backend: the `newton_sand` physics
 preset is its default, and the PhysX presets leave the sand frozen.
+
+Sand playback uses keyboard commands with `--visualizer newton_gl`. Click the Newton window, then hold
+I/K for +/- body X velocity (0.5 m/s), J/L for +/- body Y velocity (0.3 m/s), and U/O for +/- body Z angular
+velocity (0.5 rad/s). Releasing keys stops the corresponding command; Backspace zeros all commands. WASD
+and arrows remain available for camera movement. Key speeds are configured in Sand's `play_mode()` through
+`keyboard_speeds`. Training continues to sample random commands.
+
+Sand stepping is shaped without changing the 57-dimensional actor observation or 16-dimensional action:
+diagonal wheel-center lift coordination (+2.0), completed lift/advance/lower strokes (+0.5, event credit per
+second), low-leg horizontal motion (-0.2), and normalized actual wheel speed (-0.5). Lift targets 7 cm of
+relative leg motion; a stroke must advance at least 6 cm for full credit. These are kinematic proxies, not
+measurements of sand-surface clearance or contact. There is no imposed clock or added phase input. Sand
+disables `gait_level`, uses ungated torque/action penalties, and reduces the default-pose penalties tenfold.
+Its inherited raw joint-angle mirror penalty is replaced by foot-space diagonal coordination. Rough and
+Stand retain their existing reward definitions.
 
 `M20NewtonTraining-M20-M20-Stand` trains upright locomotion with the robot's base +X axis pointing up.
 It uses only random rough roads, with a fixed height-noise sampling range of 1--16 cm and no terrain
@@ -43,11 +76,20 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then crea
 environment uses the Newton backend and does not install Isaac Sim:
 
 ```bash
-uv sync
+uv sync --locked
 ```
 
 This project was generated from an Isaac Lab source checkout. Its `pyproject.toml` uses editable relative paths to that
 checkout, so regenerate the project or update `[tool.uv.sources]` if either directory moves.
+
+After updating that Isaac Lab checkout, also align this project's `[tool.uv].override-dependencies` with the
+checkout's overrides, then run `uv lock` and `uv sync --locked`. uv reads overrides from the root project;
+overrides declared by the editable `isaaclab-dev` dependency are not inherited. Resolution includes optional
+backends even when they are not installed, so an outdated root override can also block Newton-only training.
+
+The local environment retains PyTorch CUDA 12.8 on Linux x86_64 and Windows (CUDA 13.0 on Linux aarch64).
+NumPy is constrained to `<2.4` for Numba 0.64 and cmeel-boost 1.89 compatibility, and `ipywidgets` is declared explicitly to satisfy
+the installed Open3D wheel. Keep these local adjustments when refreshing configuration from a generated project.
 
 Optional backends are available through extras. Pass the extra to each `uv run` command that needs it:
 
