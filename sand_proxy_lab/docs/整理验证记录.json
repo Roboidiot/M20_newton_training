@@ -1,0 +1,17 @@
+{
+  "active_model_sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e",
+  "model_bytes_unchanged": true,
+  "sealed_file_records_verified": 371,
+  "all_archive_checksums_passed": true,
+  "migrated_npz_and_snapshot_hashes_verified": 192,
+  "active_tests_passed": 36,
+  "cli_help_entries_verified": 8,
+  "backbone_calibration_reproduced": "179 foot cases; 114 train / 65 validation; original backbone coefficients reproduced",
+  "independent_comparison_metrics_reproduced": true,
+  "fresh_plan": "179 foot cases; no shin collection or retired spline settings",
+  "collection_resumed": false,
+  "long_training_started": false,
+  "terrain_layout": "output/sand_proxy/terrains/<terrain>/",
+  "terrain_cli_entries_verified": 7,
+  "terrain_layout_migration": "sand_proxy_lab/docs/地形目录迁移.json"
+}

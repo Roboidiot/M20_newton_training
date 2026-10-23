@@ -4,7 +4,8 @@
 """Flat-ground stepping with command-dependent air-time rewards and wheel-speed penalties."""
 
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils import configclass
+from isaaclab.utils import configclass,replace
+from isaaclab.physics import PhysicsCfg
 
 from M20_newton_training.tasks.m20.mdp.walk_rewards import (
     feet_air_time_command_scaled,
@@ -12,6 +13,7 @@ from M20_newton_training.tasks.m20.mdp.walk_rewards import (
 )
 
 from .flat_env_cfg import DeeproboticsM20FlatEnvCfg
+from M20_newton_training.tasks.m20.mdp.keyboard_velocity import KeyboardVelocityCommandCfg
 
 
 @configclass
@@ -49,3 +51,15 @@ class DeeproboticsM20WalkEnvCfg(DeeproboticsM20FlatEnvCfg):
 
         if self.__class__.__name__ == "DeeproboticsM20WalkEnvCfg":
             self.disable_zero_weight_rewards()
+
+    def play_mode(self):
+        """Use body-frame keyboard velocities for playback; training retains random commands."""
+        super().play_mode()
+        self.scene.num_envs = 1
+        command = self.commands.base_velocity
+        self.commands.base_velocity = KeyboardVelocityCommandCfg(
+            asset_name=command.asset_name,
+            ranges=replace(command.ranges),
+            debug_vis=command.debug_vis,
+            keyboard_speeds=(1.5, 0.8, 0.5),
+        )

@@ -36,6 +36,28 @@ gym.register(
 )
 
 gym.register(
+    id="M20NewtonTraining-M20-M20-WalkOnSand",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.walk_on_sand_env_cfg:DeeproboticsM20WalkOnSandEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DeeproboticsM20WalkOnSandPPORunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)
+
+gym.register(
+    id="M20NewtonTraining-M20-M20-WalkOnSandProxy",
+    entry_point="M20_newton_training.tasks.m20.foot_sand_env:FootSandProxyEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.walk_on_sand_proxy_env_cfg:DeeproboticsM20WalkOnSandProxyEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:DeeproboticsM20WalkOnSandProxyPPORunnerCfg",
+        "default_agent": "rsl_rl",
+    },
+)
+
+gym.register(
     id="M20NewtonTraining-M20-M20-Rough",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

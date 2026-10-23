@@ -9,9 +9,13 @@ dist/
 
 logs/
 outputs/
+output/
 videos/
 wandb/
 
 .vscode/settings.json
 .vscode/launch.json
 pyrightconfig.json
+
+# Sealed historical sand-proxy payloads; manifests and archive index remain versionable.
+archive/**/*.tar.gz

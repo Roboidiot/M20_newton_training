@@ -65,6 +65,21 @@ class DeeproboticsM20WalkPPORunnerCfg(DeeproboticsM20FlatPPORunnerCfg):
 
 
 @configclass
+class DeeproboticsM20WalkOnSandPPORunnerCfg(DeeproboticsM20WalkPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.experiment_name = "deeprobotics_m20_walk_on_sand"
+
+
+@configclass
+class DeeproboticsM20WalkOnSandProxyPPORunnerCfg(DeeproboticsM20WalkOnSandPPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.experiment_name = "deeprobotics_m20_walk_on_sand_proxy"
+
+
+@configclass
 class DeeproboticsM20SandPPORunnerCfg(DeeproboticsM20RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()

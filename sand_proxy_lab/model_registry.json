@@ -1,0 +1,57 @@
+{
+  "active_model": "src/M20_newton_training/sand_proxy/calibrated/m20_foot_sand.json",
+  "active_model_sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e",
+  "schema_version": 2,
+  "model_type": "m20_foot_elastoplastic_sand",
+  "selected_use": "Current model selected by user for training; structural refit deferred",
+  "training_task": "M20NewtonTraining-M20-M20-WalkOnSandProxy",
+  "physics_backend": "newton_mjwarp",
+  "force_update_hz": 2000,
+  "policy_update_hz": 50,
+  "datasets": [
+    {
+      "path": "output/sand_proxy/terrains/m20_sand_v1/intruder",
+      "role": "backbone_calibration",
+      "raw_foot_cases": 179,
+      "training_cases": 114,
+      "validation_cases": 65
+    },
+    {
+      "path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001",
+      "role": "sliding_refit_source",
+      "physics_frames": 1800,
+      "duration_s": 4.5,
+      "train_end_s": 3.0,
+      "validation_start_s": 3.2
+    },
+    {
+      "path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065",
+      "role": "unfitted_new_condition_validation",
+      "physics_frames": 600,
+      "duration_s": 1.5,
+      "evaluation_s": 1.0
+    },
+    {
+      "path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001",
+      "role": "unfitted_random_action_validation",
+      "status": "collection_closed_after_user_pause",
+      "duration_requested_s": 30,
+      "saved_duration_s": 7,
+      "physics_frames": 2800
+    },
+    {
+      "path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis",
+      "role": "random_first_episode_analysis",
+      "duration_s": 6,
+      "evaluation_s": 5.5,
+      "physics_frames": 2400
+    }
+  ],
+  "current_fit_results": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1",
+  "historical_archive": "archive/sand_proxy_legacy_20261023",
+  "provenance_note": "Historical JSON/NPZ source paths are retained verbatim; resolve moved files through the archive migration manifest.",
+  "backbone_source": "Embedded base parameters in active JSON and each shadow model_snapshot.json; recalibrate from intruder data",
+  "default_terrain": "m20_sand_v1",
+  "terrain_directory": "output/sand_proxy/terrains/m20_sand_v1",
+  "current_backbone_fit": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone"
+}

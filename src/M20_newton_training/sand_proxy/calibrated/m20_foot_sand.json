@@ -1,0 +1,394 @@
+{
+  "schema_version": 2,
+  "model_type": "m20_foot_elastoplastic_sand",
+  "source_config_id": "86ffe94ac41e8dcd",
+  "source_data_origins": [
+    "newton_mpm"
+  ],
+  "geometry": {
+    "type": "capsule",
+    "prim_path": "/M20/fl_wheel/collisions/mesh_0/capsule",
+    "xyz": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "quat_xyzw": [
+      0.7071067932881643,
+      0.0,
+      0.0,
+      0.7071067690849305
+    ],
+    "radius": 0.09000000357627869,
+    "length": 0.054000001400709145
+  },
+  "material": {
+    "density": 1700.0,
+    "young_modulus": 1000000000000000.0,
+    "poisson_ratio": 0.3,
+    "viscosity": 0.0,
+    "friction": 0.7,
+    "damping": 0.005,
+    "yield_pressure": 1000000000000.0,
+    "tensile_yield_ratio": 0.0,
+    "yield_stress": 0.0,
+    "hardening": 0.0,
+    "dilatancy": 0.0,
+    "hardening_rate": 1.0,
+    "softening_rate": 1.0
+  },
+  "bearing": {
+    "a": 32943.34824641832,
+    "n": 1.5586164326096765,
+    "b": 0.688008556804824
+  },
+  "domain": {
+    "max_depth_m": 0.28,
+    "max_speed_m_s": 2.6,
+    "max_vertical_speed_m_s": 0.6,
+    "max_lateral_speed_m_s": 0.18
+  },
+  "history": {
+    "slots": 16,
+    "diameter_m": 0.18000000715255737,
+    "default_keep": 0.7
+  },
+  "low_speed_epsilon_m_s": 0.02,
+  "fit_cases": [
+    "foot_press_d200_v050_train_s0",
+    "foot_press_d200_v100_train_s0",
+    "foot_press_d200_v150_train_s0",
+    "foot_press_d200_v200_train_s0",
+    "foot_press_d200_v250_train_s0",
+    "foot_press_d200_v300_train_s0",
+    "foot_pull_d010_v050_train_s0",
+    "foot_pull_d010_v100_train_s0",
+    "foot_pull_d010_v150_train_s0",
+    "foot_pull_d010_v200_train_s0",
+    "foot_pull_d010_v250_train_s0",
+    "foot_pull_d010_v300_train_s0",
+    "foot_pull_d020_v050_train_s0",
+    "foot_pull_d020_v100_train_s0",
+    "foot_pull_d020_v150_train_s0",
+    "foot_pull_d020_v200_train_s0",
+    "foot_pull_d020_v250_train_s0",
+    "foot_pull_d020_v300_train_s0",
+    "foot_pull_d050_v050_train_s0",
+    "foot_pull_d050_v100_train_s0",
+    "foot_pull_d050_v150_train_s0",
+    "foot_pull_d050_v200_train_s0",
+    "foot_pull_d050_v250_train_s0",
+    "foot_pull_d050_v300_train_s0",
+    "foot_pull_d100_v050_train_s0",
+    "foot_pull_d100_v100_train_s0",
+    "foot_pull_d100_v150_train_s0",
+    "foot_pull_d100_v200_train_s0",
+    "foot_pull_d100_v250_train_s0",
+    "foot_pull_d100_v300_train_s0",
+    "foot_pull_d150_v050_train_s0",
+    "foot_pull_d150_v100_train_s0",
+    "foot_pull_d150_v150_train_s0",
+    "foot_pull_d150_v200_train_s0",
+    "foot_pull_d150_v250_train_s0",
+    "foot_pull_d150_v300_train_s0",
+    "foot_pull_d200_v050_train_s0",
+    "foot_pull_d200_v100_train_s0",
+    "foot_pull_d200_v150_train_s0",
+    "foot_pull_d200_v200_train_s0",
+    "foot_pull_d200_v250_train_s0",
+    "foot_pull_d200_v300_train_s0",
+    "foot_forward_d010_v050_train_s0",
+    "foot_forward_d010_v100_train_s0",
+    "foot_forward_d010_v150_train_s0",
+    "foot_forward_d010_v200_train_s0",
+    "foot_forward_d010_v250_train_s0",
+    "foot_forward_d010_v300_train_s0",
+    "foot_forward_d020_v050_train_s0",
+    "foot_forward_d020_v100_train_s0",
+    "foot_forward_d020_v150_train_s0",
+    "foot_forward_d020_v200_train_s0",
+    "foot_forward_d020_v250_train_s0",
+    "foot_forward_d020_v300_train_s0",
+    "foot_forward_d050_v050_train_s0",
+    "foot_forward_d050_v100_train_s0",
+    "foot_forward_d050_v150_train_s0",
+    "foot_forward_d050_v200_train_s0",
+    "foot_forward_d050_v250_train_s0",
+    "foot_forward_d050_v300_train_s0",
+    "foot_forward_d100_v050_train_s0",
+    "foot_forward_d100_v100_train_s0",
+    "foot_forward_d100_v150_train_s0",
+    "foot_forward_d100_v200_train_s0",
+    "foot_forward_d100_v250_train_s0",
+    "foot_forward_d100_v300_train_s0",
+    "foot_forward_d150_v050_train_s0",
+    "foot_forward_d150_v100_train_s0",
+    "foot_forward_d150_v150_train_s0",
+    "foot_forward_d150_v200_train_s0",
+    "foot_forward_d150_v250_train_s0",
+    "foot_forward_d150_v300_train_s0",
+    "foot_forward_d200_v050_train_s0",
+    "foot_forward_d200_v100_train_s0",
+    "foot_forward_d200_v150_train_s0",
+    "foot_forward_d200_v200_train_s0",
+    "foot_forward_d200_v250_train_s0",
+    "foot_forward_d200_v300_train_s0",
+    "foot_lateral_d010_v050_train_s0",
+    "foot_lateral_d010_v100_train_s0",
+    "foot_lateral_d010_v150_train_s0",
+    "foot_lateral_d010_v200_train_s0",
+    "foot_lateral_d010_v250_train_s0",
+    "foot_lateral_d010_v300_train_s0",
+    "foot_lateral_d020_v050_train_s0",
+    "foot_lateral_d020_v100_train_s0",
+    "foot_lateral_d020_v150_train_s0",
+    "foot_lateral_d020_v200_train_s0",
+    "foot_lateral_d020_v250_train_s0",
+    "foot_lateral_d020_v300_train_s0",
+    "foot_lateral_d050_v050_train_s0",
+    "foot_lateral_d050_v100_train_s0",
+    "foot_lateral_d050_v150_train_s0",
+    "foot_lateral_d050_v200_train_s0",
+    "foot_lateral_d050_v250_train_s0",
+    "foot_lateral_d050_v300_train_s0",
+    "foot_lateral_d100_v050_train_s0",
+    "foot_lateral_d100_v100_train_s0",
+    "foot_lateral_d100_v150_train_s0",
+    "foot_lateral_d100_v200_train_s0",
+    "foot_lateral_d100_v250_train_s0",
+    "foot_lateral_d100_v300_train_s0",
+    "foot_lateral_d150_v050_train_s0",
+    "foot_lateral_d150_v100_train_s0",
+    "foot_lateral_d150_v150_train_s0",
+    "foot_lateral_d150_v200_train_s0",
+    "foot_lateral_d150_v250_train_s0",
+    "foot_lateral_d150_v300_train_s0",
+    "foot_lateral_d200_v050_train_s0",
+    "foot_lateral_d200_v100_train_s0",
+    "foot_lateral_d200_v150_train_s0",
+    "foot_lateral_d200_v200_train_s0",
+    "foot_lateral_d200_v250_train_s0",
+    "foot_lateral_d200_v300_train_s0"
+  ],
+  "unfitted_settings": [
+    "16 shared footprint slots and keep=0.7 follow reference assumptions",
+    "low-speed regularization epsilon=0.02 m/s and explicit-force stability limiter",
+    "force application point is the wheel's lowest-point contact approximation"
+  ],
+  "limitations": [
+    "Foot forces only: no shin, thigh or belly force",
+    "Fixed-orientation translational calibration; rolling, tilt, reverse and combined motions extrapolate",
+    "Steady drag uses final 2/3 as in newton-terrain; full transient errors are reported separately",
+    "Force strength saturates at max calibrated depth/speed; coverage flags are available at runtime",
+    "MPM intruder replay is not a whole-robot policy validation"
+  ],
+  "drag_x": {
+    "a": 7910.531349780648,
+    "n": 1.640547004187661,
+    "b": 1.2173461559503398
+  },
+  "lift_ratio_x": {
+    "a": 0.33684379163839273,
+    "n": -0.18226534308452683
+  },
+  "shear_length_x_m": 0.004084981197189776,
+  "drag_y": {
+    "a": 10390.697821458603,
+    "n": 1.8468589308852288,
+    "b": 1.1765285670599204
+  },
+  "lift_ratio_y": {
+    "a": 0.34303024264704185,
+    "n": -0.17877203674215114
+  },
+  "shear_length_y_m": 0.005521502484192696,
+  "unloading_stiffness": {
+    "a": 2138867.1593365003,
+    "n": 1.1151338602079803
+  },
+  "unloading_damping": {
+    "a": 35050.98703900335,
+    "n": 1.0626650980022512
+  },
+  "pull_p_N_per_m": 0,
+  "calibration": {
+    "training_cases": 114,
+    "validation_cases": 65,
+    "scope": "intruder backbone benchmark only; active-model results are in shadow_calibration",
+    "primary_passed": 42,
+    "primary_validation_total": 65,
+    "status": "experimental_calibrated_contact_model"
+  },
+  "intruder_domain": {
+    "max_depth_m": 0.2,
+    "max_speed_m_s": 0.3
+  },
+  "training_depth_limit_m": 0.2,
+  "shadow_contact": {
+    "function": "saturating_viscous_contact",
+    "speed_filter_tau_s": 0.03,
+    "coefficients": {
+      "cx": 707.0651901597868,
+      "dx": 0.09000000356979597,
+      "satx": 0.3631651827077277,
+      "cy": 691.4673151644488,
+      "dy": 0.02842963031378623,
+      "saty": 19.999999999999996,
+      "bearing": 14.5627703854302,
+      "db": 0.009029664892355623,
+      "soft": 0.23527305548924698,
+      "cz": 854.7951921895449,
+      "dz": 0.005649491932870287,
+      "nz": 1.1266946082625906,
+      "blend": 0.05000000000000001
+    }
+  },
+  "shadow_calibration": {
+    "source_trace": "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/output/sand_shadow/walk_forward_001/traces.npz",
+    "trace_sha256": "60ad5a7b2a3dd83528045621c1be5b83626c91fb187497fdc7a92f3d3581f81b",
+    "source_snapshot_sha256": "78f04962272ae98a8b2e9c4534f73972e03f220165128eb35cb5e91efe9f118c",
+    "training_end_s": 3.0,
+    "validation_start_s": 3.2,
+    "temporal_gap_s": 0.20000000000000018,
+    "target": "four wheel MPM forces only; other robot forces excluded",
+    "fit_info": {
+      "train_contact_foot_samples": 4731,
+      "axis_loss_scale_N": [
+        148.35308837890625,
+        9.362067222595215,
+        97.62708282470703
+      ],
+      "optimizer_nfev": 24,
+      "at_parameter_bounds": [
+        "dx",
+        "saty",
+        "blend"
+      ]
+    },
+    "improves_blocked_validation": true,
+    "status": "single_trajectory_refinement_not_general_validation",
+    "validation": {
+      "physics_frames": 520,
+      "foot_samples": 2080,
+      "before": {
+        "rmse_xyz_N": [
+          509.6447448730469,
+          26.68022918701172,
+          327.6845703125
+        ],
+        "nrmse_xyz": [
+          2.3301618099212646,
+          1.0812617540359497,
+          1.9347227811813354
+        ],
+        "mean_total_Fz_N": 1225.9969482421875
+      },
+      "after": {
+        "rmse_xyz_N": [
+          78.59910583496094,
+          11.823075294494629,
+          9.629837989807129
+        ],
+        "nrmse_xyz": [
+          0.3593652844429016,
+          0.47915026545524597,
+          0.05685671046376228
+        ],
+        "mean_total_Fz_N": 161.77574157714844
+      },
+      "mean_total_mpm_Fz_N": 149.0142059326172
+    },
+    "limitations": [
+      "One forward-policy trajectory only; blocked suffix is not an independent rollout",
+      "Speed, penetration and time co-vary; not all parameters are identifiable",
+      "Experimental contact formula; no shin, thigh or belly support",
+      "Expanded bounds describe this trace, not a fully sampled calibration grid",
+      "Original intruder law is retained at sustained zero horizontal speed"
+    ],
+    "runtime_checks": {
+      "support_2khz": {
+        "steps": 250,
+        "num_envs": 4,
+        "nominal_reset": true,
+        "episode_resets": 0,
+        "mean_proxy_support_N": 338.3553161621094,
+        "robot_weight_N": 338.3610534667969,
+        "support_weight_ratio": 0.9999830722808838,
+        "mean_base_z_m": 0.7939705848693848,
+        "minimum_foot_bottom_above_floor_m": 0.2390882968902588,
+        "max_foot_penetration_m": 0.060911715030670166,
+        "observation_shapes": {
+          "policy": [
+            4,
+            57
+          ],
+          "critic": [
+            4,
+            60
+          ]
+        },
+        "action_dimension": 16,
+        "physics_dt_s": 0.0005,
+        "force_update_count": 10000,
+        "expected_force_update_count": 10000
+      },
+      "unfitted_offset_rollout": {
+        "physics_frames": 400,
+        "foot_samples": 1600,
+        "before": {
+          "rmse_xyz_N": [
+            103.28160095214844,
+            2.739917039871216,
+            166.23965454101562
+          ],
+          "nrmse_xyz": [
+            0.9717392921447754,
+            0.5445197820663452,
+            2.224020481109619
+          ],
+          "mean_total_Fz_N": 891.3735961914062
+        },
+        "after": {
+          "rmse_xyz_N": [
+            11.922918319702148,
+            1.7828530073165894,
+            3.4173836708068848
+          ],
+          "nrmse_xyz": [
+            0.11217842996120453,
+            0.3543168306350708,
+            0.045719120651483536
+          ],
+          "mean_total_Fz_N": 246.904296875
+        },
+        "mean_total_mpm_Fz_N": 242.3428497314453,
+        "classification": "Unfitted new rollout: start x=0.065 m and vx=0.10 m/s",
+        "source": "output/sand_shadow/refit_validation_offset065/traces.npz"
+      },
+      "original_intruder_regression": {
+        "press": {
+          "passed": 5,
+          "total": 5,
+          "mean_rmse_N": 26.241350527625904
+        },
+        "pull": {
+          "passed": 9,
+          "total": 20,
+          "mean_rmse_N": 21.97928434380638
+        },
+        "forward": {
+          "passed": 1,
+          "total": 20,
+          "mean_rmse_N": 214.6091443626061
+        },
+        "lateral": {
+          "passed": 0,
+          "total": 20,
+          "mean_rmse_N": 179.427635912757
+        }
+      }
+    },
+    "deployment_status": "experimental_current_whole_robot_mpm_refinement"
+  },
+  "recommended_physics_dt_s": 0.0005
+}

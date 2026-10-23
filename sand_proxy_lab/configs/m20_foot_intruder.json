@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "source": "M20 actual USD foot/shin, fixed orientation, translational MPM reference",
+  "usd_path": "deep_robotics_model/M20/M20_usd/M20.usd",
+  "wheel_shape": {
+    "type": "capsule",
+    "prim_path": "/M20/fl_wheel/collisions/mesh_0/capsule",
+    "xyz": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "quat_xyzw": [
+      0.7071067932881643,
+      0.0,
+      0.0,
+      0.7071067690849305
+    ],
+    "radius": 0.09000000357627869,
+    "length": 0.054000001400709145
+  },
+  "shin_shapes": [
+    {
+      "type": "box",
+      "prim_path": "/M20/fl_knee/collisions/mesh_0/box",
+      "xyz": [
+        0.014999999664723873,
+        -0.014999999664723873,
+        -0.125
+      ],
+      "quat_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "size": [
+        0.05999999865889549,
+        0.02500000037252903,
+        0.25
+      ]
+    },
+    {
+      "type": "capsule",
+      "prim_path": "/M20/fl_knee/collisions/mesh_1/capsule",
+      "xyz": [
+        0.0,
+        0.019999999552965164,
+        -0.25
+      ],
+      "quat_xyzw": [
+        0.7071067932881643,
+        0.0,
+        0.0,
+        0.7071067690849305
+      ],
+      "radius": 0.03999999910593033,
+      "length": 0.1000000014901161
+    }
+  ],
+  "usd_layers_sha256": {
+    "deep_robotics_model/M20/M20_usd/M20.usd": "378f8498b796cbe6512b9c7ff9eb01cd8eb6806e8acd3486f6263561c017428a",
+    "deep_robotics_model/M20/M20_usd/configuration/M20_physics.usd": "212adca7499b9b63665975eb329ab496bec12367c0594d2971ad1743be7a5a9f",
+    "deep_robotics_model/M20/M20_usd/configuration/M20_sensor.usd": "caf3de23eb1d88521b8e0e7559b377ce42b17bfaceb78a8c29486b1b911d32a7",
+    "deep_robotics_model/M20/M20_usd/configuration/M20_base.usd": "cd5198d0980a9d3313ea20050879eb16a7ec5dc9f4f7145d0fb8e014cce4e47e",
+    "deep_robotics_model/M20/M20_usd/configuration/M20_robot.usd": "ccf75113ccca6ff132daced5f12f574319348fa96dd6ae2d58547348438c6789"
+  },
+  "wheel_radius": 0.09000000357627869,
+  "wheel_width": 0.054000001400709145,
+  "wheel_total_width": 0.23400000855326653,
+  "material": {
+    "density": 1700.0,
+    "young_modulus": 1000000000000000.0,
+    "poisson_ratio": 0.3,
+    "viscosity": 0.0,
+    "friction": 0.7,
+    "damping": 0.005,
+    "yield_pressure": 1000000000000.0,
+    "tensile_yield_ratio": 0.0,
+    "yield_stress": 0.0,
+    "hardening": 0.0,
+    "dilatancy": 0.0,
+    "hardening_rate": 1.0,
+    "softening_rate": 1.0
+  },
+  "bed_size": [
+    0.7,
+    0.6,
+    0.4
+  ],
+  "voxel_size": 0.01,
+  "training_voxel_size": 0.02,
+  "particles_per_axis": 1.0,
+  "jitter_fraction": 0.3,
+  "collider_margin": 0.01,
+  "collider_friction": 1.0,
+  "dt": 0.005,
+  "settle_seconds": 0.25,
+  "insertion_speed": 0.1,
+  "hold_seconds": 0.1,
+  "clearance": 0.02,
+  "travel": 0.08,
+  "max_iterations": 100,
+  "tolerance": 0.0001,
+  "collider_basis": "pic27",
+  "velocity_basis": "Q1",
+  "strain_basis": "P0",
+  "gravity": [
+    0.0,
+    0.0,
+    -9.81
+  ],
+  "sampling": {
+    "train_depths": [
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.15,
+      0.2
+    ],
+    "train_speeds": [
+      0.05,
+      0.1,
+      0.15,
+      0.2,
+      0.25,
+      0.3
+    ],
+    "train_seeds": [
+      0
+    ],
+    "validation_depths": [
+      0.035,
+      0.075,
+      0.125,
+      0.175
+    ],
+    "validation_speeds": [
+      0.075,
+      0.125,
+      0.175,
+      0.225,
+      0.275
+    ],
+    "validation_seeds": [
+      1
+    ]
+  },
+  "fitting": {
+    "press_depth_knots": [
+      0.01,
+      0.02,
+      0.03,
+      0.04,
+      0.05,
+      0.060000000000000005,
+      0.06999999999999999,
+      0.08,
+      0.09,
+      0.09999999999999999,
+      0.11,
+      0.12,
+      0.13,
+      0.14,
+      0.15000000000000002,
+      0.16,
+      0.17,
+      0.18000000000000002,
+      0.19,
+      0.2
+    ],
+    "progress_knots": [
+      0.0,
+      0.0625,
+      0.125,
+      0.1875,
+      0.25,
+      0.3125,
+      0.375,
+      0.4375,
+      0.5,
+      0.5625,
+      0.625,
+      0.6875,
+      0.75,
+      0.8125,
+      0.875,
+      0.9375,
+      1.0
+    ],
+    "curvature_penalty": 0.0001,
+    "absolute_rmse_tolerance_N": 5.0,
+    "relative_rmse_tolerance": 0.25
+  }
+}

@@ -6,6 +6,8 @@ The registered tasks are:
 
 - `M20NewtonTraining-M20-M20-Flat`
 - `M20NewtonTraining-M20-M20-Walk`
+- `M20NewtonTraining-M20-M20-WalkOnSand`
+- `M20NewtonTraining-M20-M20-WalkOnSandProxy`
 - `M20NewtonTraining-M20-M20-Rough`
 - `M20NewtonTraining-M20-M20-Sand`
 - `M20NewtonTraining-M20-M20-Stand`
@@ -29,6 +31,77 @@ uv run isaaclab train --rl_library rsl_rl --task M20NewtonTraining-M20-M20-Walk 
   --num_envs 2048 --logger tensorboard physics=newton_mjwarp
 uv run tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk --port 6006
 ```
+
+`M20NewtonTraining-M20-M20-WalkOnSand` inherits Walk's complete observation/action interface and PPO
+configuration (57 actor inputs, 60 critic inputs, 16 actions, 10,000 iterations), on Sand's per-environment
+MPM beds and `newton_sand` physics. It uses the current Sand reset position (about z=0.68 m with the 20 cm
+bed), centered XY and roll/pitch in +/-0.1 rad. The six contact-dependent rewards (undesired contacts,
+contact force, air time, turn sliding, turn gait status and symmetry) are disabled along with ContactSensor;
+their existing functions remain unchanged. Relative diagonal lift (+2) and completed-stroke credit (+0.5)
+reuse Sand's kinematic rewards, with 7 cm lift and 6 cm horizontal travel references. Their scores double
+for side commands, triple for turn commands, and quadruple for combined commands, using 0.1 thresholds.
+They do not measure actual sand clearance, air time or contact. Other non-contact rewards, wheel-speed
+penalty and command sampling remain identical to Walk. No contact proxy or new network input is added.
+Play uses Walk's existing command behavior; it does not inherit Sand's keyboard override.
+
+```bash
+uv run isaaclab train --rl_library rsl_rl --task M20NewtonTraining-M20-M20-WalkOnSand \
+  --num_envs 4 --logger tensorboard physics=newton_sand
+# To fine-tune an existing Walk checkpoint, append:
+# --checkpoint /absolute/path/to/walk/model_XXXX.pt --no-resume_optimizer_state
+uv run tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk_on_sand --port 6006
+```
+
+`M20NewtonTraining-M20-M20-WalkOnSandProxy` replaces the particle bed with calibrated external forces
+on the four M20 wheel feet. It keeps Walk's 57/60 observation dimensions, 16 actions and PPO networks;
+no shin, thigh or belly forces are applied. The deployed parameters are in
+`src/M20_newton_training/sand_proxy/calibrated/m20_foot_sand.json`. The original MPM tasks remain available.
+This task uses plain `newton_mjwarp`, with a virtual sand surface at z=0.40 m and a non-colliding surface
+visual. There are no particles to render. Commands are initially limited to +/-0.25 m/s forward,
++/-0.15 m/s sideways and +/-0.30 rad/s turning. Foot forces update at 2 kHz; the policy remains at 50 Hz.
+The task owns physics decimation so Newton cannot fold these state-dependent external forces into one
+policy-step update.
+
+WalkOnSandProxy disables `sand_diagonal_steps` and `sand_step_completion`. Its `contact_forces` penalty
+uses the complete applied proxy force (support plus horizontal drag), with a 100 N per-foot threshold
+and weight -0.00015. It sums each foot's excess using its peak force norm over the last three physics
+ticks. Its Walk contact-driven terms are enabled using proxy forces: `feet_air_time` (+10),
+`feet_slide_ang_z_cmd` (-2), `rotation_gait_status` (+2), and `rotation_gait_symmetry` (+15).
+A foot is in contact when its applied proxy force norm exceeds 1 N. Physics-rate timers retain all
+touchdowns within each policy step, ignore the first landing after reset, and clear on per-environment
+reset. The air-time score uses a 1.0 s cap, retaining Walk's 0.2 s threshold and side/turn command multipliers.
+Non-foot undesired contacts remain disabled because the proxy models only feet. No ContactSensor or
+force observations are added. WalkOnSand's MPM reward configuration is unchanged.
+The robot starts at z=0.98 m, maintaining its 0.58 m initial base clearance above the reference surface.
+Any foot penetrating more than 0.30 m below the reference sand surface terminates the proxy episode;
+this task-level setting overrides the deployed model's default training depth limit.
+The fitted depth-domain marker remains 0.28 m; deeper inputs retain the model's existing depth clamping.
+
+```bash
+# Start small; scale num_envs after inspecting the policy and measured force-domain coverage.
+.venv/bin/isaaclab train --rl_library rsl_rl --task M20NewtonTraining-M20-M20-WalkOnSandProxy \
+  --num_envs 64 --logger tensorboard --viz none physics=newton_mjwarp
+.venv/bin/tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy --port 6006
+
+# Keyboard play: I/K forward/back, J/L sideways, U/O turn; release to stop.
+.venv/bin/isaaclab play --rl_library rsl_rl --task M20NewtonTraining-M20-M20-WalkOnSandProxy \
+  --num_envs 1 --checkpoint latest --viz newton physics=newton_mjwarp
+
+# Nominal support check, without PPO or MPM.
+.venv/bin/python -m sand_proxy_lab.validation.check_runtime --num-envs 4 --steps 500
+```
+
+The current schema-2 foot model combines an intruder-calibrated elastoplastic backbone with a
+sliding response fitted to a whole-robot MPM trace. Its parameters are unchanged by the directory
+reorganization. Collection, fitting, shadow validation, plotting and deployment tools are maintained
+in [sand_proxy_lab](sand_proxy_lab/README.md). The Chinese [complete workflow guide](sand_proxy_lab/docs/标定与训练完整流程.md)
+explains the model, data, equations and commands from fresh calibration through training.
+
+Active data is under `output/sand_proxy/terrains/<地形名>/`; archived models, obsolete tools and unused trials are sealed
+under [the legacy archive](archive/sand_proxy_legacy_20261023/README.md). The independent shadow tools
+use either a Walk checkpoint (`python -m sand_proxy_lab.shadow`) or IsaacLab RandomAgent
+(`python -m sand_proxy_lab.shadow.random_agent`); only MPM forces act on the robot in those comparisons.
+Current-model provenance and dataset roles are indexed in `sand_proxy_lab/model_registry.json`.
 
 `M20NewtonTraining-M20-M20-Sand` puts each environment on a granular bed advanced by Newton's implicit MPM
 solver, coupled to the rigid robot solve. It therefore requires the Newton backend: the `newton_sand` physics

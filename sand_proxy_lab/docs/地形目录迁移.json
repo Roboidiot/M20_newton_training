@@ -1,0 +1,1360 @@
+{
+  "date": "2026-10-23T20:07:39.245218+08:00",
+  "terrain": "m20_sand_v1",
+  "moves": [
+    {
+      "old": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit",
+      "new": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone"
+    },
+    {
+      "old": "output/sand_proxy/intruder/m20_foot_v1",
+      "new": "output/sand_proxy/terrains/m20_sand_v1/intruder"
+    },
+    {
+      "old": "output/sand_proxy/fit/intruder_backbone_v1",
+      "new": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1"
+    },
+    {
+      "old": "output/sand_proxy/fit/mpm_contact_v1",
+      "new": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1"
+    },
+    {
+      "old": "output/sand_proxy/shadow",
+      "new": "output/sand_proxy/terrains/m20_sand_v1/shadow"
+    }
+  ],
+  "files": [
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit/manifest.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone/manifest.json",
+      "sha256": "444886170c022013bc83c041b4e43e7ca12e5e512f50817dec390e3f17bb1be5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit/proxy_model.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone/proxy_model.json",
+      "sha256": "78f04962272ae98a8b2e9c4534f73972e03f220165128eb35cb5e91efe9f118c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit/report.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone/report.json",
+      "sha256": "5ec174b04dfc117f360c50e5baafffdd3e2e86f182c857aeed59e9832fef72b0"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit/report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone/report.md",
+      "sha256": "2f7e021414f7d9e43fe1ba32f4549b69994282114190053f22212dce9788a331"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/backbone_fit/validation.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone/validation.png",
+      "sha256": "82d6eaf4f30320c0be9f7b4263d918dd414988c01b91215e8443b61f12e03194"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/.collection.lock",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/.collection.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/cases.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/cases.json",
+      "sha256": "358788adec790e350ff00c7d84296f690363dccd92ae76fbb67c5d9ced378b41"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/config.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/config.json",
+      "sha256": "996462fce0d7683e125312ae92342e7827dab22cd01271bb99c189f6d5c95425"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v050_train_s0.npz",
+      "sha256": "6f89a8d6596f7e48315059b437a21220fc40a555a175a93764f1e255b9111c7a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v100_train_s0.npz",
+      "sha256": "71a5177db48f87b5a87dc4f524200cb28bbdce61ef584c9b0eb19cc9cdceec58"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v150_train_s0.npz",
+      "sha256": "c7b2e636bc9ef77848320b7a159b03b5cf727608e52f08419517fc3c5c4d6ee7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v200_train_s0.npz",
+      "sha256": "d0a8201a1918a6c5cd05a0eca95ab9b3f6fa501ed88abeccf413d8ed30fcf116"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v250_train_s0.npz",
+      "sha256": "02fc83fed69cc3e9bf5570901057ed85bea3e7ffb579550f302a0de8f3b49577"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d010_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d010_v300_train_s0.npz",
+      "sha256": "a4da4dd89a32fe8928b598f963f76e6e75cbd2926d6f81e7a4c057ba97b494a7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v050_train_s0.npz",
+      "sha256": "399228eca64c485f6f87a326bc928810a53e2810e7682736be48a020a5f506e8"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v100_train_s0.npz",
+      "sha256": "f84750d20f8047e8e7a4867c7d3dfb9924550da0559a3a5944bb83c407d0cdc1"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v150_train_s0.npz",
+      "sha256": "3f1045db2dbf4c112140cea42c6697c0115951f37f6e5ebf12c8c647bc282060"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v200_train_s0.npz",
+      "sha256": "982af3188c2674a3e7cdf0975ab8f70165e5900c2dc1b333c9d7f57d4ad3ad0b"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v250_train_s0.npz",
+      "sha256": "a89a15f5bffd70be6530907df01eb12d1c1d172627a0911d92cf6fbbe9c509ec"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d020_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d020_v300_train_s0.npz",
+      "sha256": "fda50918d2d1d321d1c1159e4e6c49e31b69700a03b2001a9316a51110311cef"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d035_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d035_v075_validation_s1.npz",
+      "sha256": "3738025c0a7ca6bf14752ae613fc2df9265b6df959d52d65a66e7c8ad553c8a7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d035_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d035_v125_validation_s1.npz",
+      "sha256": "74a14f37c4a3b8a780bfcbe1fe1ff8c043a3fde2a2464c04020203a2ef6f785f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d035_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d035_v175_validation_s1.npz",
+      "sha256": "12b64c84fc9fa463a81df9b0359b4bf3e34d488e218091c3b8fa41faf67357a4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d035_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d035_v225_validation_s1.npz",
+      "sha256": "93dd64f83dcccf7107af8a92ed0cb9666d81e05e5fd0fd599434f47a0a815afb"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d035_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d035_v275_validation_s1.npz",
+      "sha256": "3e47bc79a4a3db8d4d2fbb6c309374f09b4de359dfb6f1b8434d6cd126af7db9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v050_train_s0.npz",
+      "sha256": "23db16c7dcb507232f5489277f97fe873e5d37078beb65754f1e84978b61bb6a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v100_train_s0.npz",
+      "sha256": "4c481cc0b90b75a512ec2fb6b8d1c52a18a3a451fd2a529ac60f4bb205e0f785"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v150_train_s0.npz",
+      "sha256": "32021c79d66270bb3168dfda28237f44e6bd0f6919dc598dd0ffcbcd78181f98"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v200_train_s0.npz",
+      "sha256": "d943f9156b8d1e598b44f2b1f0aa91bf22af630911143be0e3c03661475d9ec6"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v250_train_s0.npz",
+      "sha256": "126b9fff65195b21cc310e459c64dffcb536bdaee6f9650a14eaa172dd3ae819"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d050_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d050_v300_train_s0.npz",
+      "sha256": "93975bd644f970b521be017a723f763383425018f620a2042dcaa6038171ae83"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d075_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d075_v075_validation_s1.npz",
+      "sha256": "b1c0a226320abc788c9cc141689a4913d04840f0fddf9f02959837dfd09316f9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d075_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d075_v125_validation_s1.npz",
+      "sha256": "847b4850d1fad60a6c5dea32fcc4e158900ff57ec9f13b43c768642b060d777c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d075_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d075_v175_validation_s1.npz",
+      "sha256": "deeec989ff419ca478a612a396370e0ab452f1d11c5dd694c676cda74a558c55"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d075_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d075_v225_validation_s1.npz",
+      "sha256": "60896c405328254d5460717e18b4b5b17a6c072623fbb54162345abb61e6711e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d075_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d075_v275_validation_s1.npz",
+      "sha256": "a7c019a895af5a65c9fbe46e0c39a7d3f136f441baf7d07ae244c5e8f30ba870"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v050_train_s0.npz",
+      "sha256": "b69854b29488ba33a1fe983a73b61d0e18e4e804d281566f63c775dd671e5ca7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v100_train_s0.npz",
+      "sha256": "66f55f38b61826a80d72bd7ee925773095bf7f71b0316f5e831e7330edd1e63e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v150_train_s0.npz",
+      "sha256": "8a1a250c5bfa5dd0a2a88cfbc974dc54a49edc76445051533fa65d2c96a10107"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v200_train_s0.npz",
+      "sha256": "202a5c656ad56d73f73d3ec7aa8281f1edcd22e3c976d7a7132556b9c31ad7df"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v250_train_s0.npz",
+      "sha256": "c77449b0ce2d77703c5a28f5959f5cc5c6c529e7d2e698a451906b838fa22de9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d100_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d100_v300_train_s0.npz",
+      "sha256": "c8bb72ac6ecaa00b39b3853a09b087d2b6f3c097ef7cf2d80a3c91c48c2dbced"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d125_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d125_v075_validation_s1.npz",
+      "sha256": "6db65da8d765ec406764d81dcd97405b9511ed533680791af2b9162fe3d23bb5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d125_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d125_v125_validation_s1.npz",
+      "sha256": "8df1b1e0b1446fb389dcdd243fa27529e8b1d814b5e95c1f378ecb4c62639bff"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d125_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d125_v175_validation_s1.npz",
+      "sha256": "3bb3622e3bf1bad3ff39067149fee6601ee2f501cbbb67f84c939b11d15cc15a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d125_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d125_v225_validation_s1.npz",
+      "sha256": "2ec47203a906bdb484c84a8189350cb0aa005061246aa5e2a01c7f859398c999"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d125_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d125_v275_validation_s1.npz",
+      "sha256": "912810faf193e234bf156504f2b3f05e7fb17627f2db85fe6babe22942b8df35"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v050_train_s0.npz",
+      "sha256": "c320ae4179616542490436ac5b90cbcceef2b0fe85937cbde5672e83f69d4c8a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v100_train_s0.npz",
+      "sha256": "e26eecf3afcc918c4a6f21c0610bbd34f501f9023bf38fd2af43cc159f1c87fc"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v150_train_s0.npz",
+      "sha256": "62ec6ef8c4eb87bc8407e5f40a3744ed8ad7671a4235508c93b4762c58dbaf66"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v200_train_s0.npz",
+      "sha256": "2ea52600009b0a338f82550337a28793551763744c225362bf85c20493372f27"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v250_train_s0.npz",
+      "sha256": "1e211219b8e3cac414e0343fb95d1626f623c0ed1dd3994a361c13ef7e74cd06"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d150_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d150_v300_train_s0.npz",
+      "sha256": "be68167b732046fe815a4ebbabf80828aacfc10b37a5ca1966b1a8aa624e3394"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d175_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d175_v075_validation_s1.npz",
+      "sha256": "9dd0e3e974b7426e365af964bdfc48c70c4b3767bf75f1f2990bf86dc9baf918"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d175_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d175_v125_validation_s1.npz",
+      "sha256": "4f7270d4088fe7ff0523f6438f6d8b5e146b67b217a2919cc4057cccc4199aff"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d175_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d175_v175_validation_s1.npz",
+      "sha256": "c52d040d3d109b87418fc8952c9160a087af3648f5a7dc5039d7cbfc6587fc40"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d175_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d175_v225_validation_s1.npz",
+      "sha256": "f907df3fc1c69c94c8fb1702b3ebc11c142fc0d3b2cd748bd5961c0621b9c2c9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d175_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d175_v275_validation_s1.npz",
+      "sha256": "9f8399ea059ad57cfe8140d55a5867996e19f937d35abb83f16991b57d3e659d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v050_train_s0.npz",
+      "sha256": "4568e2879f4871153b5f642eea908c5b38044b737e343204335ea84fc7182513"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v100_train_s0.npz",
+      "sha256": "3399d1d5b696a0fc7a120d0234cc5572a105156cccbecc49675da834b28e7616"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v150_train_s0.npz",
+      "sha256": "3904dee3c63c43a32a9f1b082001c6a9288ff6d6cb67fc124e2e3607b6814879"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v200_train_s0.npz",
+      "sha256": "03d175e33041c5cbb3be71fef412870ce2651c9c0ad35d0b98ee4d535be09fcf"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v250_train_s0.npz",
+      "sha256": "85ab9ae677b934019f62d1fb41a2bd6d7d4342ee4633d7e1dd936b788076f861"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_forward_d200_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_forward_d200_v300_train_s0.npz",
+      "sha256": "38754b8a55cdc935077deefc873e89b92e2971e27f4c0e42b04d24ff68762b63"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v050_train_s0.npz",
+      "sha256": "cc4c72b9356b56c893290297fa9de9dcaff2553b609207805583ed5ccdfff6e2"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v100_train_s0.npz",
+      "sha256": "b27fe0e1523e921cb633394d72dc597644df96235b9a21d4709750ac0e13310a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v150_train_s0.npz",
+      "sha256": "91b5b2b92418acd4595e33024ffb40e902a7a6fb5dfbdce9f6133095c22ff1ae"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v200_train_s0.npz",
+      "sha256": "827ffd87dfb44d77b405593af3d6428631c7685d7cd117623312d38fc79ce4b5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v250_train_s0.npz",
+      "sha256": "eb42cf29b0dca91e81f3c7881c8f0808ad3c31414e24e5bba18695f591f54757"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d010_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d010_v300_train_s0.npz",
+      "sha256": "081579da79183c6259b7851af149c30dea04e472df1fe189c9c5b5201887d95b"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v050_train_s0.npz",
+      "sha256": "26b30e46ce237469114f8895dd023a6111907c160a1eb4d8882e464ce2333df5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v100_train_s0.npz",
+      "sha256": "3abbccef609e3cfabf0cdcaffd43a6b37c0c8e91d24abe056756e91dce35a111"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v150_train_s0.npz",
+      "sha256": "0584d3a3d9767264121ea5b6357eba76021c68fd522ab2c6f51987eb7dc83f2f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v200_train_s0.npz",
+      "sha256": "48cb8be0f545f3ebe613a8efb8f6e0025c16799b6b2afdf4df0210f695a3a29a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v250_train_s0.npz",
+      "sha256": "1d354443f2f36c2901ed6212803c02f124438908c4ab87f28280c9ef4d9b3af6"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d020_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d020_v300_train_s0.npz",
+      "sha256": "37b1d5049202df2dfb49a3feb9dae51d50746e5166d179cf63510f7979f1372c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d035_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d035_v075_validation_s1.npz",
+      "sha256": "583bdf812dd1cb5439350342ac8ef05515dbdbcd508ebec8f8a5966844babffc"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d035_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d035_v125_validation_s1.npz",
+      "sha256": "cccfd3d37142b0e98294470d6e3289fb5075457f76b439b6e0b963bc173e9e80"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d035_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d035_v175_validation_s1.npz",
+      "sha256": "57ea2760a8af070f7e59d20d9dc8f03650d8286047ef9e1a59f6473d843068dc"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d035_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d035_v225_validation_s1.npz",
+      "sha256": "74af92f6705e327b0f6c9623563f430268483868f989c2ba3d64ef064f1431b4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d035_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d035_v275_validation_s1.npz",
+      "sha256": "e703d5202398d1f1478ed1fb50c72cc9e5795e37d0384b4ce5ad16becc741c94"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v050_train_s0.npz",
+      "sha256": "09d1e6c1e4969f6c2927e3f7c8a3d911bb8fcd242ffcda085b3c7dd068f0b0b7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v100_train_s0.npz",
+      "sha256": "8ed279c466b8f3f07bdca13819c2cdb50dca7a09f2d1d17c877141f4a75432e6"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v150_train_s0.npz",
+      "sha256": "6de9a42b82330005d494241ab823d6afdccd26cfa292ff158f885b4d5b029917"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v200_train_s0.npz",
+      "sha256": "fe617dd76d70566b676f5a68e7d84f93cd964305b22c5253c553cd352dfc0eca"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v250_train_s0.npz",
+      "sha256": "034c1291d040203e6a5689554bc393e37775b1e00acacc42bb249034032429ee"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d050_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d050_v300_train_s0.npz",
+      "sha256": "ead82427fa6b29c878a89a61b5105e044f61fd48eab1af56d869d3d58829cd7e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d075_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d075_v075_validation_s1.npz",
+      "sha256": "272dc23646a2fa6cb74b1f93169d2bd9eca94feaf23c60c3ce9f398113a790f4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d075_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d075_v125_validation_s1.npz",
+      "sha256": "08bea5c986cab8ce3838c5b4d24af000a5d0e9017b7788e5a9a7dad791f25f79"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d075_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d075_v175_validation_s1.npz",
+      "sha256": "dc291ae300b21b69523fbca1bc7a59713461dab42e9759269bbbbf9c279380ac"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d075_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d075_v225_validation_s1.npz",
+      "sha256": "29d3ae765fe31fe7cb5aced9987baed415297ffa8c8a2508fd7812fcd7cabcb2"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d075_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d075_v275_validation_s1.npz",
+      "sha256": "21c466fcbe8c0c2b4d9e2d31b53d2304c19007849819ecd004849dfead32e550"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v050_train_s0.npz",
+      "sha256": "baa2aabcb3a19150e356805e573b693af81f4d72aa6d651491e3519aa5751cef"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v100_train_s0.npz",
+      "sha256": "ef2aba44be604509169ed442e0be9a5ff542d6be10b9631fd24a171256a33ed5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v150_train_s0.npz",
+      "sha256": "f8682217ad3ae4ebafb226b86c51776b01a4a08a754e78c9e033d7b7413abb10"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v200_train_s0.npz",
+      "sha256": "d2c38d337f5200e7edab5d945fc7201e431beab74595e27869f380e27fa602f8"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v250_train_s0.npz",
+      "sha256": "a0243c8766a4578055f595918adb1b2c65c582c453dd77e49e6da4ed6c985b7d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d100_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d100_v300_train_s0.npz",
+      "sha256": "a5817f8ab2b7727a311c9a40f93feb0bfd7864b475d1422390ac4dd88b58cc18"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d125_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d125_v075_validation_s1.npz",
+      "sha256": "04129f17fff9f65f66eb4beee7e707a3681d79218e8fce8e693ad262a90ccd5b"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d125_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d125_v125_validation_s1.npz",
+      "sha256": "7a67087f309d57a1710ad6cfa8ea295739c22e82b84e02346c9094a104f7f7ee"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d125_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d125_v175_validation_s1.npz",
+      "sha256": "dfb0aee89e14c63eabce8548432d60d80f48b832a512beff79e88722fe9a424c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d125_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d125_v225_validation_s1.npz",
+      "sha256": "209f867b6ba26e1fc31b365c8315e36e7890266137312f861b66f97bf7edb624"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d125_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d125_v275_validation_s1.npz",
+      "sha256": "521954b7a41fa4499df9d0c283c2d2770c8c6ce3cffc305818dc799b58439e96"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v050_train_s0.npz",
+      "sha256": "23b8a0d48ee6f4eb512fac7ec131382dac9643132d5005dd1fa01f1371bf8b73"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v100_train_s0.npz",
+      "sha256": "41e7a90c9727fa029d6db91ac94c1c84c9fd620395d180a2e2eac117ec3bb356"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v150_train_s0.npz",
+      "sha256": "b5f0bd8bc1521ae1e29001fc77c308bf87cb10fd600b5c5989ac7f3c64200998"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v200_train_s0.npz",
+      "sha256": "41978e7c92f54446ab0fabb33bb4285d04972c3e8be252e23260bd88dc699957"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v250_train_s0.npz",
+      "sha256": "d60be1c841025c3ee788643f4dfdf34022793c7f990b3a257819d4aecd34aa88"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d150_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d150_v300_train_s0.npz",
+      "sha256": "d0e8ef42b5fbc844742858a8ec9b8aa9652ef5d3842d5016f186262fe45d9065"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d175_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d175_v075_validation_s1.npz",
+      "sha256": "4aec645e5e7eebcd66d089573e3d142115e70924bc7d1ec13d42da7b497991bb"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d175_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d175_v125_validation_s1.npz",
+      "sha256": "b13ed07255f635242063df7914d47df1bc24bc432ddeeefe3588108bb85a01a9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d175_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d175_v175_validation_s1.npz",
+      "sha256": "aa31a4e12c1afd7fb22df701d5beea99807f675a9bc9ebe72fa84525b0e33798"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d175_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d175_v225_validation_s1.npz",
+      "sha256": "6b335450b1bc7009070d1ffb0099ea2a28689dbb493678f8b17e901adc00a0e5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d175_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d175_v275_validation_s1.npz",
+      "sha256": "269fafd918c28fb3a062c41a78e34265e86db7b40b41f0077aa4c4cb943674bf"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v050_train_s0.npz",
+      "sha256": "b5eec93f4214039f9cce04ec812a4f8191213a17053b2d0ac20ae4cdb0cc0ebc"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v100_train_s0.npz",
+      "sha256": "fd95589255f5ac883d7c61754dbe4fab59dc8f97879cd37a1d39b1f0b2ff9c15"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v150_train_s0.npz",
+      "sha256": "1073c017fd66d8d00da39e4144dac3d8818321eadaebef35c98c763f9871049f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v200_train_s0.npz",
+      "sha256": "950131838cce55d3aa4fff535bf4ddf33508615e34dab785af577b3085bd5dd0"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v250_train_s0.npz",
+      "sha256": "fcdb26a02d248aa77239cdff3536478c9b9236904deb486f6450996253a5bcf1"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_lateral_d200_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_lateral_d200_v300_train_s0.npz",
+      "sha256": "2ad4531c0dd5b946ae3e21a0c727788156fc44b56596ba92da11529dd48361d3"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v050_train_s0.npz",
+      "sha256": "06641d54d051af9cc88ce6dfc1294f0c6919958e196846b69876d58dab6cec5d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v075_validation_s1.npz",
+      "sha256": "cd904f2aa241eafe57283c0253a0b1527286899df28b88226e3a71b7eb40554e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v100_train_s0.npz",
+      "sha256": "152e66f34b3accebb9775f341132659a0c2dda6f8d20d7f4942b0452a39c2061"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v125_validation_s1.npz",
+      "sha256": "c99a456ca6748960831960a856b0939a0ef7887600fd2bb77724ce47d3ac2a48"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v150_train_s0.npz",
+      "sha256": "e7a42dbb8c64f5e8aa221d84041569ca5dc83164122118ac16b11c02577cb202"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v175_validation_s1.npz",
+      "sha256": "13c73b704644d490c73181bfc79e005022e062d2462c77fd560bccea89f08fe0"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v200_train_s0.npz",
+      "sha256": "689756077e38eb393be747a3c2dc0bdbc11cc73c019175037863bfa505ae1df1"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v225_validation_s1.npz",
+      "sha256": "531adc5664d28190cbaf01eba1e961cdcf64207c0eeb98bc06b580fdba4bb7ea"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v250_train_s0.npz",
+      "sha256": "da9980dc4a8f41e125dd712c18c56ee7b2f0dc22e4a7b10a7bced6cde18c87fc"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v275_validation_s1.npz",
+      "sha256": "8a0d1e74b3cbabea10faca58939ca586bcf8cacd70717d315558846969e350b6"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_press_d200_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_press_d200_v300_train_s0.npz",
+      "sha256": "f1591e5480b45332b82e6db1c666f54050f6654b8b3d6e61ed5563aa07fd0150"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v050_train_s0.npz",
+      "sha256": "02b21be7c62cb20eb1ee4edfcd3afccb49a13dc6446f268f6bc7aa6fc3400dd0"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v100_train_s0.npz",
+      "sha256": "f08f230de33936d249a312847e162e4ca454e30312d582aee879a6d9f36d084c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v150_train_s0.npz",
+      "sha256": "4b67c8022aa61cf4ccac574691325c5f085fc48c6f28b571377cc40121b7c5c4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v200_train_s0.npz",
+      "sha256": "d0638df7f15e9af52e49cb0c20a2837cef233aabd5ab4adbd87a9358b09b611f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v250_train_s0.npz",
+      "sha256": "c05faf0b2c46fd3a980cbcc856a095157d43eb794f2d94ba2d55da541bab7b06"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d010_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d010_v300_train_s0.npz",
+      "sha256": "ab474cbfc73fd814d2d428082be64d3d8598de1299be45511a6cfee23fdc52eb"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v050_train_s0.npz",
+      "sha256": "26988f32ad43c71ee1fb65de90fc94a49e0ea36f7fbf31678b92b5fb6950d50f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v100_train_s0.npz",
+      "sha256": "fdc82f14b898b19dd83d13741d2274b50e914ec4dfe6189c417faa4ac07fc4c5"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v150_train_s0.npz",
+      "sha256": "4047bbfff09f10cd61b6c0011d631e8b5a9776c6db56679674aac47323207940"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v200_train_s0.npz",
+      "sha256": "8d3a167545d6f90f4815ba58dd603ee2b01a930a83e28f84d8388693c270ec54"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v250_train_s0.npz",
+      "sha256": "966a042e67599cb07f126690ad2309054f445fdd1f4a9f4a2ae6b6e76483d85c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d020_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d020_v300_train_s0.npz",
+      "sha256": "762ba9f4938a2a2cadd1e2b0f056d64b2883b7142f1ba3202f970895df835b5f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d035_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d035_v075_validation_s1.npz",
+      "sha256": "baac59d6420dfe87da341f192a62369c9934521846349545d3cdb990fecb7eec"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d035_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d035_v125_validation_s1.npz",
+      "sha256": "15045b68cd83cf2ad57937a346251ee831f57c9ca560cb69484d55b775aa8a3c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d035_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d035_v175_validation_s1.npz",
+      "sha256": "6c371d0d08e8a0e1fb6a9b410b2d201133c7e59fa0c86096965191ee76b39281"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d035_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d035_v225_validation_s1.npz",
+      "sha256": "e3631912f0c01751219c256425661bd26db53a765cdc212d7c57e2e99b0ef5ea"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d035_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d035_v275_validation_s1.npz",
+      "sha256": "d092f1a7addb5e578a7a3b1e22070c0f771b2161cab3def714fcabf604dd4b53"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v050_train_s0.npz",
+      "sha256": "1385dac51c7fc25a722fd61684c605eab2aed0b1e48fd93ebb968f355d97b240"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v100_train_s0.npz",
+      "sha256": "5409289e1e7ddf991e6af17f07c78a2c005c6e592534de1a3c8c4ae33978caec"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v150_train_s0.npz",
+      "sha256": "a90aea2112dc9a2395e800632e6e83afcd52ac1f403f4a529d6fbfe1fc2e95bd"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v200_train_s0.npz",
+      "sha256": "7df811dcf53b9ac94516b605af2a0de75acbb9b2eabb918435631ade7ef880e9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v250_train_s0.npz",
+      "sha256": "6a64910b76980efa740c04dee12795f4ff4d02ef0caa21a52d7d2bcc0c2ccad4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d050_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d050_v300_train_s0.npz",
+      "sha256": "c7252319605983783f1d82aeef6068940db6c582bea8ab3948062af956e4feda"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d075_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d075_v075_validation_s1.npz",
+      "sha256": "1edc38ad267c6a2649effd8ba64c90be49c05952cff09e158de25b5733c5eeac"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d075_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d075_v125_validation_s1.npz",
+      "sha256": "e1eca39e2d730a3a5bba2409bef055cafa64a562d17f06204a49d633464cb846"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d075_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d075_v175_validation_s1.npz",
+      "sha256": "cbe09b127e524c5a49c436388e6368857a1c68a2d52b2d5c96642c4c3d3f6550"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d075_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d075_v225_validation_s1.npz",
+      "sha256": "35623de8a4cc1ffc36900d74333ca3b9d1a924a53da4d0b572922d117e47b37b"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d075_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d075_v275_validation_s1.npz",
+      "sha256": "292b5f07a9de2a4f790c22ff266ab7fb0cd7348621215001675ff7f8c76632d4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v050_train_s0.npz",
+      "sha256": "33339524f5c6d1289578b3b87419f671875f7b4de13d1eb71aecd585fba18b6c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v100_train_s0.npz",
+      "sha256": "1bce91abbab6c700fb958ff72bbfca108679c553af2af257811d5980663f8767"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v150_train_s0.npz",
+      "sha256": "90c36b6b25d469a2a3d1dc682bd6c1098186c97e160f918cd70665a695969bf4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v200_train_s0.npz",
+      "sha256": "781a867a6dd9b305657dbb66023c61d9125de29e5b1f04bc609873095cd087d7"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v250_train_s0.npz",
+      "sha256": "6d71864a9151feb82af99ed92cc9901ca012c511001bb1b90e5ac9489a7f65b4"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d100_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d100_v300_train_s0.npz",
+      "sha256": "89fb4b3fbe255354bb397e31472649b16bc78287a6997160e31e72f51ad83371"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d125_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d125_v075_validation_s1.npz",
+      "sha256": "f88eac22c807c01ee9d671c26e9bea134cc62adbb49275f351d66a1bb72c9a9a"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d125_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d125_v125_validation_s1.npz",
+      "sha256": "bd6f4d16739ecb5446f7b9dc0713e24cb69a5f4e242bd2dae79fbb06f705e420"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d125_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d125_v175_validation_s1.npz",
+      "sha256": "bde5a88e71fbcbc89c6a690379de7efb8e3b8b1cd08f346fc12e5cbe8f8b229e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d125_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d125_v225_validation_s1.npz",
+      "sha256": "71f7132a646cb92881775699ffaa3074e6374a53cd494859516bb78e7f7d27e8"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d125_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d125_v275_validation_s1.npz",
+      "sha256": "5e8fc715435189dc375f7e18bb96d031f561d3d6fff3b1e35eb89c31d4e00a7b"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v050_train_s0.npz",
+      "sha256": "73a7c74f3fb7a34eea62d7b176efa6942207d96eae7b858f821ec5fe490cb8fb"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v100_train_s0.npz",
+      "sha256": "efb5abb5a291bfad886ad289b5bd3c53128415e585a9d9dc80326deec4e398d2"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v150_train_s0.npz",
+      "sha256": "04a77af1de71e3981de23289e331e9708713be7ba33f3e141162d1cb018d598e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v200_train_s0.npz",
+      "sha256": "2bd885a476f0c5712976eac8ecf92db72452597660c313f4e772b743801cca5f"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v250_train_s0.npz",
+      "sha256": "8f5281db9cf9a185e1867d231cf47f1227f8fac61b586cafc20bf097f63464f9"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d150_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d150_v300_train_s0.npz",
+      "sha256": "bb559926e57f3523be2a9bcb896dddbfaf7437b1ac3f0dcf4b4d56c3c0a88875"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d175_v075_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d175_v075_validation_s1.npz",
+      "sha256": "ac8cc3fae52c1167900d7c7b42c3a7099c0999fcd5ceeb43343c237330ec6c16"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d175_v125_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d175_v125_validation_s1.npz",
+      "sha256": "783e9fb57a89471592fd877acfa9306091143f58f55d2a3ed9dfade7098f676d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d175_v175_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d175_v175_validation_s1.npz",
+      "sha256": "13ab595e68e14905e4ffbd6d9f30eb5ccd41c543d0a30a5456d392261800f8fd"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d175_v225_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d175_v225_validation_s1.npz",
+      "sha256": "6ee9f7b68afe682f8e6e5b0e3268fe4d3c6a375c117d3b2f9b546039ef95f90c"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d175_v275_validation_s1.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d175_v275_validation_s1.npz",
+      "sha256": "9e9a255b701067d83d4e1bec079727e7adfed5e5864bcc71c5750e14cdff251d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v050_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v050_train_s0.npz",
+      "sha256": "83cd9c6b945922d70592493db6b9ffe8abbc57289906334b8c3e7eb05f1100e2"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v100_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v100_train_s0.npz",
+      "sha256": "c1dd8c2ff45622a8c8cebd853e0fd141a4d8cf72e21f5fe749bfe55cd79d7906"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v150_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v150_train_s0.npz",
+      "sha256": "05207225613d5788dae51eb4b99f03d27949bd7fff7cd8afe97352169b74fd5e"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v200_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v200_train_s0.npz",
+      "sha256": "6d7a763297b91524d45dd4620ef5cfb90e299bfa7716ae290bfa1ad785c9f20d"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v250_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v250_train_s0.npz",
+      "sha256": "e10612efc8715b869c8add76f1dab465118b01af0320cc7845c7d1504d234a14"
+    },
+    {
+      "old_path": "output/sand_proxy/intruder/m20_foot_v1/foot_pull_d200_v300_train_s0.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/intruder/foot_pull_d200_v300_train_s0.npz",
+      "sha256": "0a39c134221204ed4b9ecaadfd574444762c120b4530080842dfdf933d0ae1e9"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/intruder_backbone_v1/manifest.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1/manifest.json",
+      "sha256": "444886170c022013bc83c041b4e43e7ca12e5e512f50817dec390e3f17bb1be5"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/intruder_backbone_v1/proxy_model.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1/proxy_model.json",
+      "sha256": "78f04962272ae98a8b2e9c4534f73972e03f220165128eb35cb5e91efe9f118c"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/intruder_backbone_v1/report.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1/report.json",
+      "sha256": "5ec174b04dfc117f360c50e5baafffdd3e2e86f182c857aeed59e9832fef72b0"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/intruder_backbone_v1/report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1/report.md",
+      "sha256": "2f7e021414f7d9e43fe1ba32f4549b69994282114190053f22212dce9788a331"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/intruder_backbone_v1/validation.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/backbone_reference_v1/validation.png",
+      "sha256": "82d6eaf4f30320c0be9f7b4263d918dd414988c01b91215e8443b61f12e03194"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/CURRENT_LAYOUT.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/CURRENT_LAYOUT.md",
+      "sha256": "3b933bfc33cbf783cfc152d6c1ba18480467a29841509492ac885a841617bdf4"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/baseline_model.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/baseline_model.json",
+      "sha256": "78f04962272ae98a8b2e9c4534f73972e03f220165128eb35cb5e91efe9f118c"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/before_after.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/before_after.png",
+      "sha256": "21db7e333595dc2cc38b7adb42d4928384042a94d1746e899ef1a9831522779c"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/deployment.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/deployment.json",
+      "sha256": "05345e2fc690ea438a86aa5fbb1c4b9a637b064cf693899faab217262b28b49f"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/independent_validation.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/independent_validation.json",
+      "sha256": "de810f5177f993be1a5769a1751fc543d4af731286e48a0554299e0bf5f5e9d4"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/original_intruder_regression.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/original_intruder_regression.json",
+      "sha256": "8e622c90062993b99826e442e9d090af1711a9e5ae4ff937b95a12fef444db32"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/proxy_model.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/proxy_model.json",
+      "sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/repeat_rollout_comparison.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/repeat_rollout_comparison.json",
+      "sha256": "19d8323a18fb709e6a6630ca56404cb5aa99986668030cbb45c41637652dddfd"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/replay.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/replay.npz",
+      "sha256": "1113716392f3ec98b4d3bfcb7c190bbb37c7bacc83b8043f650898aaaadbf930"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/report.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/report.json",
+      "sha256": "74000be591ef7fb29d3d7a7d1869a5b773feed4e43f6cc42a4b8b8c68a12c907"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/report.md",
+      "sha256": "99592de113345f9f3a2c09c2afd29b840f3c0ba9e8dbd14c3444f76db267dc94"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/support_2khz.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/support_2khz.json",
+      "sha256": "9fffa11f5b4cda6a7931ec66e0b378cfd53bf16c9a5d1ae11f665b7817f1b048"
+    },
+    {
+      "old_path": "output/sand_proxy/fit/mpm_contact_v1/结果说明.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/fit/contact/mpm_contact_v1/结果说明.md",
+      "sha256": "6dd379fa7369f1bbbb980763ed20978fb963f22e9232ba2bfdc232ef5c25d36c"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/CURRENT_LAYOUT.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/CURRENT_LAYOUT.md",
+      "sha256": "3b933bfc33cbf783cfc152d6c1ba18480467a29841509492ac885a841617bdf4"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/environment.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/environment.json",
+      "sha256": "37cd8fa943a7c610ad5bfe29d3456cdd3c1ae940d6b345bd26ba826b542e7c35"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/control_windows.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/control_windows.npz",
+      "sha256": "0532bc151f1ef76dc343f68660d76a4d3f9eea1b5d0877e59231de450a89a650"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/diagnostics.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/diagnostics.json",
+      "sha256": "53ee171187e63c64b755a0e247972dd651b046b6707531c07bcc18044b73edc8"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/error_diagnostics.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/error_diagnostics.png",
+      "sha256": "d6c306226b1fe6693aa27796b6c7274aeb56a6bab62d97e9db283acae41925fd"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/error_diagnostics.svg",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/error_diagnostics.svg",
+      "sha256": "cf9e787d06dacff0a9a0fb476eba71a015fef54bb491f9979e936dc0d3942005"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/forces.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/forces.csv",
+      "sha256": "ea810a9cf60636abbe8a22d3f36415f5a9527c0b895d934b31c1b54ab68d05ba"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/metadata.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/metadata.json",
+      "sha256": "b6c57239e15697c17f264e62e2ee20bcaf4fd4d28bcdd240a14b70adade9f26e"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/model_snapshot.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/model_snapshot.json",
+      "sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_episode_000.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_episode_000.png",
+      "sha256": "2487538ab5d143b60ee586bdff37fcbc9704c5785864ef274baa6949ed8ecb33"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_foot_forces_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_foot_forces_20ms.png",
+      "sha256": "33d77ebe0284fe14efa9fac1438ec00d92076221c01101a493c2c4b3aaf91700"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_metrics.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_metrics.csv",
+      "sha256": "289ba1779f61b35a79c6f722e453f7c8402b23cbe11643d321453d93701305e2"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_metrics.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_metrics.json",
+      "sha256": "ae6ecd7504be288c1cf2f040f8200383f0263c7506d060ae6cff7553f2d88261"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_report.md",
+      "sha256": "44223c66e47e2d065bd69d2c3341539a67cd88dc48d59da5955d32aea81ad706"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/random_support_and_resets.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/random_support_and_resets.png",
+      "sha256": "6c0917f33132e55d761aeaedc5eb20d31f71a45fe5c5f1435bfcedcce039926f"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/traces.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/traces.npz",
+      "sha256": "a6de4ba31bb97b51f149fea7b597f175e26570b78b9d0a1ad8978d043be1b120"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/episode_000_analysis/第一回合分析.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/episode_000_analysis/第一回合分析.md",
+      "sha256": "39b6899df8e8d2482b105360129a5d1326cc8c2975f3e2f52e65ba4ed6cdbc07"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/metadata.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/metadata.json",
+      "sha256": "052731f955b774a97fcaa4839719bb7e7e4c0312ff286ba35ee33b5fe35227ea"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/model_snapshot.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/model_snapshot.json",
+      "sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/pause_status.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/pause_status.json",
+      "sha256": "f3b44d9bda0d31bce0c5cfc9aba4abffe0efbc819dd94bf45b493a8e08aa9d73"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/random_30s_001/traces.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/random_30s_001/traces.npz",
+      "sha256": "58ce275915389062a52a3bb7fb66fc253bc2abc04cc46cdefcddba459262fd9c"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/CURRENT_LAYOUT.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/CURRENT_LAYOUT.md",
+      "sha256": "3b933bfc33cbf783cfc152d6c1ba18480467a29841509492ac885a841617bdf4"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/README.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/README.md",
+      "sha256": "b290a1704d711380efcf358564f1e557d9733805edbd0844b43ddaa782818a54"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/__pycache__/plot_comparison.cpython-312.pyc",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/__pycache__/plot_comparison.cpython-312.pyc",
+      "sha256": "e6247cf2a09d7fcef398c19f5f3536476d1e5dd3f6e007b0a4ee50be3c19ffc4"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/before_after_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/before_after_20ms.png",
+      "sha256": "7b4225cc3170de98af1c8d852a8a6505354e9b9788e14cd4a7deebcf2b8deadb"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/before_after_20ms.svg",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/before_after_20ms.svg",
+      "sha256": "4091d549ab817633c91a7e353d7a8e254c9350be5c18db65a3dbbf71f8660da8"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/comparison_curves.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/comparison_curves.npz",
+      "sha256": "77a0f0d05f57554e465775b93d6e3e05b65a739c4b2bb788eeaf43ab31cba953"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/comparison_metrics.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/comparison_metrics.json",
+      "sha256": "6c97da899d2c29fe10aa6a0f240c68550466d15580bd1a938268a09086f8ffe8"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_20ms.png",
+      "sha256": "964ac1f36faf417b2f58a03db18220470e3f96e7c326b4084af81d85b7316d79"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_20ms.svg",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_20ms.svg",
+      "sha256": "aa7731959affad89ce6fad71ba07cd9d12fd1f1019fe0030016848088730e981"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_raw.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_raw.png",
+      "sha256": "4ad057ba5d8110c50f18affa1978fef000e9329e776bbbdaee399a369fd3b00a"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_raw.svg",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/refitted_vs_mpm_raw.svg",
+      "sha256": "3fd662eb94d9a9dad0caa55ca740997586d4199644c216e9070e09e8aa668f5e"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/total_vertical_force_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/total_vertical_force_20ms.png",
+      "sha256": "a70c10974e41990bc76b10a1710a44f776c667464d4a620796f85843e3f85f1c"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/comparison_plots/total_vertical_force_20ms.svg",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/comparison_plots/total_vertical_force_20ms.svg",
+      "sha256": "33a4997773398c07c248c2beeebf776c45809040209980c6358b55a5291e394d"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/control_windows.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/control_windows.npz",
+      "sha256": "782842bcd5441bbe559a4f43712fed628b374e1aa763b87b8c674e46833c469c"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/environment.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/environment.json",
+      "sha256": "0023b5ac40b8b6443ba46496dc4dfdbf1addb0c244f89690ba61b4dc1fb1b03a"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/foot_forces.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/foot_forces.png",
+      "sha256": "03109d0d2c424ed186c66c4eb76c1e71275badba63a6fceadb3f9ce104653b9d"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/foot_forces_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/foot_forces_20ms.png",
+      "sha256": "6c0fb0bedd1e0e3d9d1305b60def9e8713c39df931c668db5b7249b3d8db02da"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/forces.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/forces.csv",
+      "sha256": "0f6db96838418b5f038c8d150c55f1217300134f245d0b34222acf3684310df0"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/metadata.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/metadata.json",
+      "sha256": "559be1b52836cd20d1e437688dc2d7aa3493c566cb17dc39e914a38e1bf76880"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/metrics.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/metrics.csv",
+      "sha256": "94964d1e0a6775117fe274df3d1e2f204f32c2932341d2cfaef4690bc1e818ef"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/metrics.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/metrics.json",
+      "sha256": "c7adbe2f843baa2ef9e996db58bab0ec368fdce794895e26dbcadfcf589d6494"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/model_snapshot.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/model_snapshot.json",
+      "sha256": "36e78d37a9590b7d7c0ffaed865c8c04de3ea1e1146b578718d979e19f520160"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/report.md",
+      "sha256": "3d89f37b7b51f3a49094a985fa6a30d127b403b8b543b77e5d11a315bc13068a"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/support_and_depth.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/support_and_depth.png",
+      "sha256": "6081bf179b0bc7b04f5174c39ba02b376bd70fd5dde5647555b066764e9e27ec"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/refit_validation_offset065/traces.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/refit_validation_offset065/traces.npz",
+      "sha256": "2bbb133fd252b584c0ab2d48e7e42a6d29ab6db224d30cd35734dd1a41852b04"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/CURRENT_LAYOUT.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/CURRENT_LAYOUT.md",
+      "sha256": "3b933bfc33cbf783cfc152d6c1ba18480467a29841509492ac885a841617bdf4"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/control_windows.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/control_windows.npz",
+      "sha256": "c03586523152cd883f4804fa37f7474d4eee86b49c71adbfc2bc9cd3b626be88"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/environment.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/environment.json",
+      "sha256": "0a5ed7687c0e165a8d0a7eb031785b20b88dd527c283dd170aabc7cfbade28a1"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/foot_forces.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/foot_forces.png",
+      "sha256": "7ebcd79a9de94910c31990f417f0c96270b00707c88524a9618cb9d52ecb776d"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/foot_forces_20ms.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/foot_forces_20ms.png",
+      "sha256": "543552ddf5c973810e57b38e7dafe5a70fd039dbacc78d5b8b6f219cb327b9f6"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/forces.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/forces.csv",
+      "sha256": "cc1b91a5116508dc70b052ce007bd76377fbc1ae154644f00188ac7b074faa44"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/metadata.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/metadata.json",
+      "sha256": "c83ecbe21eddac5c7436b150dc95ea931c7b91496becde283b40f264148b1841"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/metrics.csv",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/metrics.csv",
+      "sha256": "e309339dc99737c202486841bfc83d90458fbae0d961a8ac375fda0034777f70"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/metrics.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/metrics.json",
+      "sha256": "49bc4790c5dce5bef8c6f7092b5c6f7cc817631a02973fb985141158e3b72a76"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/model_snapshot.json",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/model_snapshot.json",
+      "sha256": "78f04962272ae98a8b2e9c4534f73972e03f220165128eb35cb5e91efe9f118c"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/report.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/report.md",
+      "sha256": "f4ed1dd71eef325e4c9e9b0778c330d4c0e1f04af37ad63aab4657999cc2b8b8"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/support_and_depth.png",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/support_and_depth.png",
+      "sha256": "541c630a01f52730032eedbc910df1b2a1dbd397b786d36edd75fceaee770ec7"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/traces.npz",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/traces.npz",
+      "sha256": "60ad5a7b2a3dd83528045621c1be5b83626c91fb187497fdc7a92f3d3581f81b"
+    },
+    {
+      "old_path": "output/sand_proxy/shadow/walk_forward_001/结果说明.md",
+      "new_path": "output/sand_proxy/terrains/m20_sand_v1/shadow/walk_forward_001/结果说明.md",
+      "sha256": "dbd48ae8ed8e9e079b02de3bc086b8b00f6e5daa426d01696224f183aeeba196"
+    }
+  ],
+  "file_count": 265,
+  "all_file_hashes_verified": true,
+  "active_model_sha256": "2eca9c13dc0c806a674a8fcdceaea2a24ce366e962e37c8dbf2c5c2e1c70f34e",
+  "active_model_unchanged": true,
+  "raw_metadata_paths_retained": true,
+  "related_tests_passed": 36,
+  "terrain_cli_entries_verified": 7
+}
