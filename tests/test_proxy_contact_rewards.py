@@ -9,16 +9,18 @@ from isaaclab.utils import to_dict
 
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import DeeproboticsM20WalkOnSandProxyEnvCfg
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
+    ProxyDiagonalLiftConsistency,
     ProxyFootContactState,
     ProxyRotationGaitStatus,
     ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
     proxy_feet_slide_ang_z_cmd,
+    proxy_hipx_symmetry_l2,
 )
 
 
 def _env():
-    commands = torch.tensor([[0.2, 0, 0], [0, -0.15, 0], [0, 0, -0.3], [0, 0.15, 0.3], [0, 0, 0]])
+    commands = torch.tensor([[0.2, 0, 0], [0, -0.15, 0], [0, 0, -0.3], [0, 0.15, 0.3], [-0.2, 0, 0]])
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
     n = len(commands)
     state = ProxyFootContactState(n, "cpu")
@@ -39,6 +41,7 @@ def _env():
         body_lin_vel_w=wrap(torch.zeros((n, 4, 3))),
         root_lin_vel_w=wrap(torch.zeros((n, 3))),
         root_quat_w=wrap(torch.tensor([[0.0, 0.0, 0.0, 1.0]]).repeat(n, 1)),
+        joint_pos=wrap(torch.zeros((n, 16))),
     )
     return SimpleNamespace(
         cfg=cfg,
@@ -110,8 +113,8 @@ def test_short_repeated_touches_are_penalized_and_partial_reset_clears_only_one_
     assert proxy_feet_air_time_command_scaled(env, **params)[0] == 0
 
 
-@pytest.mark.parametrize(("airborne_steps", "expected"), [(3, -0.02), (4, 0.0), (5, 0.02)])
-def test_airtime_is_enabled_for_zero_and_small_commands_without_side_turn_amplification(airborne_steps, expected):
+@pytest.mark.parametrize("airborne_steps", [3, 4, 5])
+def test_airtime_disables_positive_and_negative_credit_for_zero_and_small_commands(airborne_steps):
     env = _env()
     env.commands[:] = torch.tensor([[0.05, 0, 0], [0, -0.05, 0], [0, 0, -0.05], [0.03, 0.03, 0.05], [0, 0, 0]])
     state = env.term.contact_state
@@ -127,7 +130,7 @@ def test_airtime_is_enabled_for_zero_and_small_commands_without_side_turn_amplif
     state.update(force, dt=0.02, threshold=env.term.cfg.contact_force_threshold)
     torch.testing.assert_close(
         proxy_feet_air_time_command_scaled(env, **env.cfg.rewards.feet_air_time.params),
-        torch.full((env.num_envs,), expected),
+        torch.zeros(env.num_envs),
     )
     state.begin_step()
     state.update(force, dt=0.02, threshold=env.term.cfg.contact_force_threshold)
@@ -268,7 +271,7 @@ def test_rotation_lift_preserves_support_and_credited_progress_across_command_ch
     env.term.application_points_w[:, [1, 2], 2] += 0.05
     torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.2))
     anchors = reward.support_height.clone()
-    env.commands[:] = torch.tensor([[0, 0.15, 0], [-0.4, 0, 0], [0, 0, 0], [0, 0, -0.3], [0.4, 0.15, 0.5]])
+    env.commands[:] = torch.tensor([[0, 0.15, 0], [-0.4, 0, 0], [0.1, 0, 0], [0, 0, -0.3], [0.4, 0.15, 0.5]])
     assert not reward(env, **cfg.params).any()  # changing direction cannot re-credit the same height
     torch.testing.assert_close(reward.support_height, anchors)
     assert reward.support_seen.all()
@@ -350,18 +353,191 @@ def test_symmetry_occupancy_formula_warmup_and_old_samples_expire():
     assert not reward(env, **cfg.params).any()  # A's only sample has expired
 
 
-def test_symmetry_preserves_window_for_straight_sideways_zero_and_reversed_commands():
+def test_symmetry_preserves_window_for_straight_sideways_and_reversed_active_commands():
     env = _env()
-    env.commands[:] = torch.tensor([[0, 0, 0.05], [0.5, 0, 0.3], [0, 0, -0.3], [0.2, 0, 0.3], [0, 0, 0]])
+    env.commands[:] = torch.tensor([[0, 0, 0.1], [0.5, 0, 0.3], [0, 0, -0.3], [0.2, 0, 0.3], [0.1, 0, 0]])
     cfg = env.cfg.rewards.rotation_gait_symmetry
     reward = ProxyRotationGaitSymmetry(cfg, env)
     for i in range(50):
         _support(env, [0, 3] if i % 2 == 0 else [1, 2])
         result = reward(env, **cfg.params)
     torch.testing.assert_close(result, torch.ones(env.num_envs))
-    env.commands[:] = torch.tensor([[0.4, 0, 0], [0, -0.15, 0], [0, 0, 0], [0, 0, -0.3], [0, 0, 0.5]])
+    env.commands[:] = torch.tensor([[0.4, 0, 0], [0, -0.15, 0], [0.1, 0, 0], [0, 0, -0.3], [0, 0, 0.5]])
     _support(env, [0, 3])
     torch.testing.assert_close(reward(env, **cfg.params), torch.ones(env.num_envs))
     torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), 50.0))
     _support(env, [1, 2])
     torch.testing.assert_close(reward(env, **cfg.params), torch.ones(env.num_envs))
+
+
+def test_hipx_mirror_uses_opposite_angles_and_ordered_joint_slots_with_maneuver_relaxation():
+    env = _env()
+    cfg = env.cfg.rewards.hipx_symmetry
+    cfg.params["asset_cfg"].joint_ids = [7, 2, 12, 5]
+    positions = env.scene["robot"].data.joint_pos.torch
+    positions[:, [7, 2, 12, 5]] = torch.tensor(
+        [[0.2, -0.2, 0.1, -0.1], [0.2, 0.2, 0.1, 0.1], [0.2, 0.2, 0.2, 0.2], [0.2, 0.2, 0.2, 0.2], [0.2, 0.2, 0.2, 0.2]]
+    )
+    torch.testing.assert_close(proxy_hipx_symmetry_l2(env, **cfg.params), torch.tensor([0.0, 0.025, 0.04, 0.04, 0.16]))
+    env.commands.zero_()
+    torch.testing.assert_close(proxy_hipx_symmetry_l2(env, **cfg.params), torch.tensor([0.0, 0.1, 0.16, 0.16, 0.16]))
+
+
+def _completed_swing(env, reward, params, swing, lifts, steps=4, flight=False):
+    """Four unloaded samples and a landing make 0.1 s under the task convention."""
+    height = env.term.application_points_w[..., 2]
+    baseline = height[:, swing].clone()
+    support = [i for i in range(4) if i not in swing]
+    for i in range(steps):
+        _support(env, [] if flight and i == 1 else support)
+        height[:, swing] = baseline + torch.as_tensor(lifts)
+        assert not reward(env, **params).any()  # never compare a stance foot to a swinging foot
+    height[:, swing] = baseline
+    _support(env, [0, 1, 2, 3])
+    return reward(env, **params)
+
+
+@pytest.mark.parametrize(
+    ("lifts_a", "lifts_b", "expected"),
+    [
+        ([0.15, 0.15], [0.15, 0.15], 0.0),
+        ([0.25, 0.25], [0.05, 0.05], 0.64),
+        ([0.25, 0.05], [0.25, 0.05], 0.64),
+        ([1.0, 1.0], [0.0, 0.0], 4.0),
+    ],
+)
+def test_lift_consistency_compares_completed_relative_peaks_within_and_between_diagonals(lifts_a, lifts_b, expected):
+    env = _env()
+    cfg = env.cfg.rewards.diagonal_lift_consistency
+    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    env.term.application_points_w[..., 2] = torch.tensor([-0.25, -0.05, -0.1, -0.2])
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+    assert not _completed_swing(env, reward, cfg.params, [0, 3], lifts_a).any()
+    env.commands *= -1  # pending heights survive command changes
+    result = _completed_swing(env, reward, cfg.params, [1, 2], lifts_b)
+    torch.testing.assert_close(result, torch.full((env.num_envs,), expected))
+    assert not reward.pending.any()
+    assert not reward(env, **cfg.params).any()  # holding support cannot repeat a cycle penalty
+
+
+@pytest.mark.parametrize(("steps", "flight"), [(1, False), (4, True)])
+def test_lift_consistency_ignores_short_touches_and_all_feet_flight(steps, flight):
+    env = _env()
+    cfg = env.cfg.rewards.diagonal_lift_consistency
+    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25], steps, flight).any()
+    assert not reward.pending.any()
+    assert not _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05]).any()
+    assert not reward.pending[:, 0].any() and reward.pending[:, 1].all()
+
+
+def test_lift_consistency_ignores_initial_drop_and_expires_old_samples():
+    env = _env()
+    cfg = env.cfg.rewards.diagonal_lift_consistency
+    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    # No observed support for the first pair: an initial drop must not become a swing.
+    assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25]).any()
+    assert not reward.pending.any()
+    assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25]).any()
+    assert reward.pending[:, 0].all()
+    for _ in range(101):
+        assert not reward(env, **cfg.params).any()
+    assert not reward.pending.any()
+    assert not _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05]).any()
+
+
+def test_lift_consistency_partial_reset_clears_pending_and_support_only_in_selected_world():
+    env = _env()
+    cfg = env.cfg.rewards.diagonal_lift_consistency
+    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25])
+    reward.reset([0])
+    assert not reward.support_seen[0].any() and not reward.pending[0].any()
+    assert reward.pending[1:, 0].all()
+    result = _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05])
+    torch.testing.assert_close(result, torch.tensor([0.0, 0.64, 0.64, 0.64, 0.64]))
+    reward.reset()
+    assert not reward.pending.any() and not reward.support_seen.any() and not reward.swing_active.any()
+
+
+def _set_command_gate_cases(env):
+    env.commands[:] = torch.tensor([[0, 0, 0], [0.0999, 0, 0], [0.1, 0, 0], [0, 0, 0.1], [0.06, 0.08, 0]])
+
+
+def test_airtime_gate_includes_threshold_pure_yaw_and_combined_command_norm():
+    env = _env()
+    _set_command_gate_cases(env)
+    state = env.term.contact_state
+    force = _force(env.num_envs, 50.0)
+    state.update(force, env.step_dt, env.term.cfg.contact_force_threshold)
+    airborne = force.clone()
+    airborne[:, 0] = 0
+    for _ in range(14):
+        state.update(airborne, env.step_dt, env.term.cfg.contact_force_threshold)
+    state.update(force, env.step_dt, env.term.cfg.contact_force_threshold)
+    torch.testing.assert_close(
+        proxy_feet_air_time_command_scaled(env, **env.cfg.rewards.feet_air_time.params),
+        torch.tensor([0, 0, 0.2, 0.2, 0.2]),
+    )
+
+
+def test_lift_gate_respects_command_norm_and_reactivation_requires_new_support():
+    env = _env()
+    _set_command_gate_cases(env)
+    cfg = env.cfg.rewards.rotation_gait_status
+    reward = ProxyRotationGaitStatus(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _support(env, [0, 3])
+    env.term.application_points_w[:, [1, 2], 2] += 0.125
+    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0, 0, 0.5, 0.5, 0.5]))
+    env.commands[2] = 0
+    assert not reward(env, **cfg.params).any()
+    assert not reward.support_seen[2].any() and not reward.peak_progress[2].any()
+    assert reward.support_seen[3:].all()
+    env.commands[2] = torch.tensor([0.1, 0, 0])
+    assert not reward(env, **cfg.params).any()  # no carry-over swing after waiting below threshold
+    env.term.application_points_w[:, [1, 2], 2] += 0.025
+    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0, 0, 0, 0.1, 0.1]))
+
+
+def test_symmetry_gate_clears_only_inactive_worlds_and_warms_up_after_reactivation():
+    env = _env()
+    _set_command_gate_cases(env)
+    cfg = env.cfg.rewards.rotation_gait_symmetry
+    reward = ProxyRotationGaitSymmetry(cfg, env)
+    for i in range(50):
+        _support(env, [0, 3] if i % 2 == 0 else [1, 2])
+        result = reward(env, **cfg.params)
+    torch.testing.assert_close(result, torch.tensor([0, 0, 1.0, 1.0, 1.0]))
+    env.commands[2] = 0
+    _support(env, [0, 3])
+    result = reward(env, **cfg.params)
+    assert result[2] == 0 and result[3] > 0.9
+    assert not reward.pattern_buffer[2].any() and reward.samples[2] == 0
+    env.commands[2] = torch.tensor([0.1, 0, 0])
+    assert reward(env, **cfg.params)[2] == 0
+    _support(env, [1, 2])
+    torch.testing.assert_close(reward(env, **cfg.params)[2], torch.tensor(0.04))
+
+
+def test_lift_consistency_gate_disables_low_commands_and_drops_pending_samples():
+    env = _env()
+    _set_command_gate_cases(env)
+    cfg = env.cfg.rewards.diagonal_lift_consistency
+    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25])
+    assert not reward.pending[:2].any() and reward.pending[2:, 0].all()
+    env.commands[2] = 0
+    assert not reward(env, **cfg.params).any()
+    assert not reward.pending[2].any() and not reward.support_seen[2].any()
+    env.commands[2] = torch.tensor([0.1, 0, 0])
+    result = _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05])
+    torch.testing.assert_close(result, torch.tensor([0, 0, 0, 0.64, 0.64]))

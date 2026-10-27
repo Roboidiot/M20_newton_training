@@ -18,10 +18,11 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     rotate_xyzw,
 )
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
+    ProxyDiagonalLiftConsistency,
     ProxyRotationGaitStatus,
     ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
-    proxy_feet_slide_ang_z_cmd,
+    proxy_hipx_symmetry_l2,
 )
 
 
@@ -95,32 +96,48 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
     assert cfg.scene.sand_surface_visual.spawn.collision_props is None
     assert cfg.sim.dt * cfg.decimation == 0.02
     assert cfg.scene.contact_forces is None
-    assert cfg.rewards.contact_forces.func is proxy_contact_forces
-    assert cfg.rewards.contact_forces.weight == -1.5e-4
-    assert cfg.rewards.contact_forces.params == {"threshold": 100.0, "action_term_name": "sand_proxy"}
     for name in (
+        "contact_forces",
+        "hipy_joint_pos_penalty",
+        "knee_joint_pos_penalty",
+        "joint_acc_wheel_l2",
+        "action_smooth_l2",
+        "feet_slide_ang_z_cmd",
+        "joint_mirror",
+        "stand_still",
         "sand_diagonal_steps",
         "sand_step_completion",
         "undesired_contacts",
     ):
         assert getattr(cfg.rewards, name) is None
     for name, func, weight in (
-        ("feet_air_time", proxy_feet_air_time_command_scaled, 10.0),
-        ("feet_slide_ang_z_cmd", proxy_feet_slide_ang_z_cmd, -2.0),
-        ("rotation_gait_status", ProxyRotationGaitStatus, 2.0),
+        ("feet_air_time", proxy_feet_air_time_command_scaled, 5.0),
+        ("rotation_gait_status", ProxyRotationGaitStatus, 10.0),
         ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 3.0),
+        ("diagonal_lift_consistency", ProxyDiagonalLiftConsistency, -3.0),
     ):
         term = getattr(cfg.rewards, name)
         assert term.func is func and term.weight == weight
         assert term.params["action_term_name"] == "sand_proxy"
         assert "sensor_cfg" not in term.params
+        assert term.params["min_command_norm"] == 0.1
+    assert cfg.rewards.hipx_joint_pos_penalty.weight == -1.5
+    assert cfg.rewards.hipx_symmetry.func is proxy_hipx_symmetry_l2
+    assert cfg.rewards.hipx_symmetry.weight == -0.5
+    assert cfg.rewards.hipx_symmetry.params["asset_cfg"].preserve_order
+    assert cfg.rewards.rotation_gait_status.params["target_height"] == 0.25
+    assert cfg.rewards.track_lin_vel_xy_exp.weight == 3.0
+    assert cfg.rewards.track_ang_vel_z_exp.weight == 1.5
+    assert cfg.actions.sand_proxy.contact_force_threshold == 5.0
     for term in vars(cfg.rewards).values():
         if term is not None:
             sensor = term.params.get("sensor_cfg")
             assert sensor is None or sensor.name != "contact_forces"
     cfg.play_mode()
-    assert cfg.commands.base_velocity.keyboard_speeds == (0.25, 0.15, 0.3)
-    assert cfg.rewards.contact_forces.func is proxy_contact_forces
+    walk_play = DeeproboticsM20WalkEnvCfg()
+    walk_play.play_mode()
+    assert cfg.commands.base_velocity.keyboard_speeds == walk_play.commands.base_velocity.keyboard_speeds
+    assert cfg.rewards.contact_forces is None
 
 
 def test_proxy_force_penalty_uses_per_foot_peak_full_vector_without_sensor_or_model_step():
@@ -138,13 +155,13 @@ def test_proxy_force_penalty_uses_per_foot_peak_full_vector_without_sensor_or_mo
     torch.testing.assert_close(history, before)
 
 
-def test_proxy_depth_termination_uses_task_override_and_any_foot_without_changing_model():
-    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().terminations.proxy_depth_limit
+def test_proxy_depth_termination_is_disabled_but_explicit_override_remains_available():
+    assert getattr(DeeproboticsM20WalkOnSandProxyEnvCfg().terminations, "proxy_depth_limit", None) is None
     parameters = {"training_depth_limit_m": 0.20, "domain": {"max_depth_m": 0.28}}
     depth = torch.tensor([[0.0, 0.29, 0.30, -0.01], [0.0, 0.0, 0.0, 0.3001]])
     term = SimpleNamespace(model=SimpleNamespace(parameters=parameters, depth=depth))
     env = SimpleNamespace(action_manager=SimpleNamespace(get_term=lambda name: term))
-    torch.testing.assert_close(cfg.func(env, **cfg.params), torch.tensor([False, True]))
+    torch.testing.assert_close(proxy_depth_limit(env, limit_m=0.30), torch.tensor([False, True]))
     torch.testing.assert_close(proxy_depth_limit(env), torch.tensor([True, True]))
     assert parameters["training_depth_limit_m"] == 0.20
 
