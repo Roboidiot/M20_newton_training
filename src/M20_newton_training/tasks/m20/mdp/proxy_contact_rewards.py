@@ -9,47 +9,51 @@ from isaaclab.utils.math import quat_apply_inverse
 
 
 class ProxyFootContactState:
-    """Physics-rate contact timers and policy-window touchdown events.
+    """Control-rate contact timers and one sampled touchdown per foot and step.
 
+    Air-time events and rotation gait rewards use upward world-Z force only.
+    The full-force ``contact`` state remains available separately for diagnostics.
     The first landing after reset establishes support and earns no air-time credit.
-    Touchdown events remain visible until the next policy action, even if a foot
-    lifts again before rewards are evaluated. Multiple touchdowns within a policy
-    step accumulate signed credit through the recorded per-physics-step durations.
+    The last applied force of each control interval is sampled once, like
+    newton-terrain. Intermediate physics-rate contact switches are not counted.
+    Touchdown events remain visible until the next policy action.
     """
 
-    def __init__(self, num_envs, device, decimation):
+    def __init__(self, num_envs, device):
         shape = (num_envs, 4)
         self.contact = torch.zeros(shape, dtype=torch.bool, device=device)
+        self.vertical_contact = torch.zeros_like(self.contact)
         self.has_contact = torch.zeros_like(self.contact)
         self.current_air_time = torch.zeros(shape, device=device)
         self.current_contact_time = torch.zeros_like(self.current_air_time)
-        self.touchdown_air_time = torch.zeros((num_envs, decimation, 4), device=device)
+        self.touchdown_air_time = torch.zeros((num_envs, 1, 4), device=device)
         self.touchdown = torch.zeros_like(self.touchdown_air_time, dtype=torch.bool)
-        self._tick = 0
 
     def begin_step(self):
         self.touchdown.zero_()
         self.touchdown_air_time.zero_()
-        self._tick = 0
 
     def update(self, force_w, dt, threshold):
-        contact = torch.linalg.vector_norm(force_w, dim=-1) > threshold
-        landed = contact & ~self.contact & self.has_contact
+        """Update once per control step with dt=env.step_dt (0.02 s in this task)."""
+        # Upward support establishes contact; horizontal drag and downward pull-out
+        # forces must not prevent air-time credit after a foot has unloaded.
+        vertical_contact = force_w[..., 2] > threshold
+        landed = vertical_contact & ~self.vertical_contact & self.has_contact
         # The previous sample was airborne, so include the final integration interval.
         duration = self.current_air_time + dt
-        slot = self._tick % self.touchdown.shape[1]
-        self.touchdown[:, slot].copy_(landed)
-        self.touchdown_air_time[:, slot].copy_(torch.where(landed, duration, 0.0))
-        self.current_air_time.copy_(torch.where(contact, 0.0, duration))
-        self.current_contact_time.copy_(torch.where(contact, self.current_contact_time + dt, 0.0))
-        self.has_contact |= contact
-        self.contact.copy_(contact)
-        self._tick += 1
+        self.touchdown[:, 0].copy_(landed)
+        self.touchdown_air_time[:, 0].copy_(torch.where(landed, duration, 0.0))
+        self.current_air_time.copy_(torch.where(vertical_contact, 0.0, duration))
+        self.current_contact_time.copy_(torch.where(vertical_contact, self.current_contact_time + dt, 0.0))
+        self.has_contact |= vertical_contact
+        self.vertical_contact.copy_(vertical_contact)
+        self.contact.copy_(torch.linalg.vector_norm(force_w, dim=-1) > threshold)
 
     def reset(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
         for buffer in (
             self.contact,
+            self.vertical_contact,
             self.has_contact,
             self.current_air_time,
             self.current_contact_time,
@@ -62,22 +66,24 @@ class ProxyFootContactState:
 def proxy_feet_air_time_command_scaled(
     env,
     command_name,
-    threshold=0.2,
+    threshold=0.0,
     max_air_time=0.5,
     command_threshold=0.1,
     side_multiplier=2.0,
     turn_multiplier=3.0,
     action_term_name="sand_proxy",
 ):
-    """Walk's signed touchdown air-time score, including all touchdowns in the control interval."""
+    """Score touchdowns for every command, including zero; default to no short-air penalty.
+
+    ``command_threshold`` only selects the side/turn multipliers, never reward eligibility.
+    """
     state = env.action_manager.get_term(action_term_name).contact_state
     credit = ((state.touchdown_air_time.clamp(max=max_air_time) - threshold) * state.touchdown).sum(dim=(1, 2))
     command = env.command_manager.get_command(command_name)
     side = command[:, 1].abs() > command_threshold
     turn = command[:, 2].abs() > command_threshold
-    moving = (torch.linalg.vector_norm(command[:, :2], dim=1) > command_threshold) | turn
     scale = 1.0 + (side_multiplier - 1.0) * side + (turn_multiplier - 1.0) * turn
-    return credit * scale * moving
+    return credit * scale
 
 
 def proxy_feet_slide_ang_z_cmd(
@@ -105,68 +111,100 @@ def _group_ids(term, names):
     return [term.cfg.foot_names.index(name) for name in names]
 
 
-def proxy_rotation_gait_status(
-    env,
-    command_name,
-    asset_cfg,
-    group_a_body_names,
-    group_b_body_names,
-    target_height=0.05,
-    lin_vel_threshold=0.5,
-    ang_vel_threshold=0.05,
-    action_term_name="sand_proxy",
-):
-    """Walk's diagonal support/height pattern, using current proxy-force contacts."""
-    term = env.action_manager.get_term(action_term_name)
-    a = _group_ids(term, group_a_body_names)
-    b = _group_ids(term, group_b_body_names)
-    height = env.scene[asset_cfg.name].data.body_pos_w.torch[:, term.body_ids, 2]
-    delta = height[:, b].mean(dim=1) - height[:, a].mean(dim=1)
-    contact = term.contact_state.contact
-    pattern = (contact[:, a].all(dim=1) & (delta > target_height)) | (
-        contact[:, b].all(dim=1) & (-delta > target_height)
+def _diagonal_patterns(contact, a, b):
+    """A supported/B unloaded, or B supported/A unloaded; never mixed or all-foot support."""
+    return torch.stack(
+        (contact[:, a].all(dim=1) & ~contact[:, b].any(dim=1), contact[:, b].all(dim=1) & ~contact[:, a].any(dim=1)),
+        dim=1,
     )
-    command = env.command_manager.get_command(command_name)
-    gate = (command[:, :2].norm(dim=1) < lin_vel_threshold) & (command[:, 2].abs() > ang_vel_threshold)
-    return (pattern & gate).float()
 
 
-class ProxyRotationGaitSymmetry(ManagerTermBase):
-    """Walk's five-second diagonal duty-cycle score, with per-environment reset warm-up."""
+class ProxyRotationGaitStatus(ManagerTermBase):
+    """Reward new paired lift progress above each foot's last support position.
+
+    Each swing pair can earn at most one normalized unit per swing. Both feet
+    must unload while the opposite diagonal supports the robot. Holding a pose
+    or lowering and raising within the already credited height earns nothing.
+    All commands are eligible; only environment resets clear support history.
+    """
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
-        self.buffer_size = max(1, int(5.0 / env.step_dt))
-        self.contact_buffer = torch.zeros((env.num_envs, 4, self.buffer_size), device=env.device)
+        if cfg.params.get("target_height", 0.25) <= 0:
+            raise ValueError("target_height must be positive")
+        self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
+        self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
+        self.peak_progress = torch.zeros((env.num_envs, 2), device=env.device)
+
+    def reset(self, env_ids=None):
+        ids = slice(None) if env_ids is None else env_ids
+        for value in (self.support_height, self.support_seen, self.peak_progress):
+            value[ids] = 0
+
+    def __call__(
+        self,
+        env,
+        group_a_body_names,
+        group_b_body_names,
+        target_height=0.25,
+        action_term_name="sand_proxy",
+    ):
+        term = env.action_manager.get_term(action_term_name)
+        contact = term.contact_state.vertical_contact
+        height = term.application_points_w[..., 2]  # calibrated capsule bottoms, in ordered proxy slots
+        self.support_height.copy_(torch.where(contact, height, self.support_height))
+        self.support_seen |= contact
+        a = _group_ids(term, group_a_body_names)
+        b = _group_ids(term, group_b_body_names)
+        patterns = _diagonal_patterns(contact, a, b)
+        progress = ((height - self.support_height) / target_height).clamp(0.0, 1.0)
+        reward = torch.zeros(env.num_envs, device=env.device)
+        # Pattern A means A supports and B swings; progress slots follow the swing pairs.
+        for i, swing in enumerate((b, a)):
+            self.peak_progress[:, i] = torch.where(contact[:, swing].all(dim=1), 0.0, self.peak_progress[:, i])
+            valid = patterns[:, i] & self.support_seen[:, swing].all(dim=1)
+            paired = progress[:, swing].amin(dim=1)
+            increment = (paired - self.peak_progress[:, i]).clamp(min=0.0)
+            reward += torch.where(valid, increment, 0.0)
+            self.peak_progress[:, i] = torch.where(
+                valid, torch.maximum(self.peak_progress[:, i], paired), self.peak_progress[:, i]
+            )
+        return reward
+
+
+class ProxyRotationGaitSymmetry(ManagerTermBase):
+    """Balance opposite diagonal support in a sliding window for every command."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        window_s = cfg.params.get("window_s", 1.0)
+        if window_s <= 0:
+            raise ValueError("window_s must be positive")
+        self.buffer_size = max(1, round(window_s / env.step_dt))
+        self.pattern_buffer = torch.zeros((env.num_envs, 2, self.buffer_size), device=env.device)
         self.samples = torch.zeros(env.num_envs, device=env.device)
         self.buffer_idx = 0
 
     def reset(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
-        self.contact_buffer[ids] = 0
+        self.pattern_buffer[ids] = 0
         self.samples[ids] = 0
 
     def __call__(
         self,
         env,
-        command_name,
         group_a_body_names,
         group_b_body_names,
-        target_duty=0.5,
-        std=0.2,
-        lin_vel_threshold=0.5,
-        ang_vel_threshold=0.05,
+        window_s=1.0,
         action_term_name="sand_proxy",
     ):
         term = env.action_manager.get_term(action_term_name)
-        self.contact_buffer[:, :, self.buffer_idx] = term.contact_state.contact
-        self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
-        self.samples.add_(1).clamp_(max=self.buffer_size)
         a = _group_ids(term, group_a_body_names)
         b = _group_ids(term, group_b_body_names)
-        duty_a = self.contact_buffer[:, a].mean(dim=(1, 2))
-        duty_b = self.contact_buffer[:, b].mean(dim=(1, 2))
-        reward = torch.exp(-((duty_a - target_duty).square() + (duty_b - target_duty).square()) / std**2)
-        command = env.command_manager.get_command(command_name)
-        gate = (command[:, :2].norm(dim=1) < lin_vel_threshold) & (command[:, 2].abs() > ang_vel_threshold)
-        return reward * (self.samples / self.buffer_size) * gate
+        patterns = _diagonal_patterns(term.contact_state.vertical_contact, a, b)
+        self.pattern_buffer[:, :, self.buffer_idx] = patterns
+        self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
+        self.samples.add_(1).clamp_(max=self.buffer_size)
+        # Unfilled slots are zero: the score warms up without counting pre-reset history.
+        occupancy = self.pattern_buffer.mean(dim=2)
+        return 2.0 * torch.sqrt(occupancy[:, 0] * occupancy[:, 1])

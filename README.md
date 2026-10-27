@@ -66,10 +66,28 @@ WalkOnSandProxy disables `sand_diagonal_steps` and `sand_step_completion`. Its `
 uses the complete applied proxy force (support plus horizontal drag), with a 100 N per-foot threshold
 and weight -0.00015. It sums each foot's excess using its peak force norm over the last three physics
 ticks. Its Walk contact-driven terms are enabled using proxy forces: `feet_air_time` (+10),
-`feet_slide_ang_z_cmd` (-2), `rotation_gait_status` (+2), and `rotation_gait_symmetry` (+15).
-A foot is in contact when its applied proxy force norm exceeds 1 N. Physics-rate timers retain all
-touchdowns within each policy step, ignore the first landing after reset, and clear on per-environment
-reset. The air-time score uses a 1.0 s cap, retaining Walk's 0.2 s threshold and side/turn command multipliers.
+`rotation_gait_status` (+2), and `rotation_gait_symmetry` (+15), matching Rough's weights.
+`feet_slide_ang_z_cmd` is disabled.
+Air-time tracking and both rotation gait rewards consider a foot supported only when its applied
+upward world-Z force exceeds 5 N; horizontal drag and downward pull-out forces do not count as support.
+Air/contact timers and touchdown detection
+sample the last applied force once per 20 ms policy step (50 Hz), matching newton-terrain's sampling;
+intermediate physics-rate force crossings are not counted. Each foot can produce at most one touchdown
+per policy step. The first landing after reset is ignored, and each environment's timers clear on reset.
+Physical proxy forces still update at 2 kHz. The air-time score uses a 0.1 s threshold and 1.0 s cap;
+touchdowns after less than 0.1 s receive a negative score. It is enabled for all commands, including zero; the 0.1 command threshold
+only selects side/turn amplification (x2/x3, or x4 together), never reward eligibility.
+Both `rotation_gait_*` terms now apply to every command, including straight, sideways, mixed and zero
+commands. The existing names are retained; there is no yaw or planar-speed gate.
+`rotation_gait_status` rewards only new lift progress of both unloaded diagonal feet, measured from
+individual last-support capsule-bottom heights (25 cm target, weaker foot sets the score). The opposite
+diagonal must support the robot; hovering and revisiting a credited height add no score.
+`rotation_gait_symmetry` uses a 1 s window of true opposing diagonal states and scores
+2*sqrt(p_A*p_B). Fixed support patterns, front-only support and all-four synchronous contacts score zero.
+Each environment clears gait history on reset; changing commands or reversing yaw does not erase
+support anchors, already credited lift progress, or the symmetry window. The 25 cm target is relative
+to each foot's last support position, not an absolute height above the virtual sand surface.
+`joint_mirror` and `stand_still` are disabled in WalkOnSandProxy.
 Non-foot undesired contacts remain disabled because the proxy models only feet. No ContactSensor or
 force observations are added. WalkOnSand's MPM reward configuration is unchanged.
 The robot starts at z=0.98 m, maintaining its 0.58 m initial base clearance above the reference surface.

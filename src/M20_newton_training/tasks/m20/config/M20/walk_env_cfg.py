@@ -33,8 +33,8 @@ class DeeproboticsM20WalkEnvCfg(DeeproboticsM20FlatEnvCfg):
         self.rewards.feet_air_time.params = {
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=self.foot_link_name),
-            "threshold": 0.2,
-            "max_air_time": 0.5,
+            "threshold": 0.5,
+            "max_air_time": 1.0,
             "command_threshold": 0.1,
             "side_multiplier": 2.0,
             "turn_multiplier": 3.0,

@@ -18,10 +18,10 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     rotate_xyzw,
 )
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
+    ProxyRotationGaitStatus,
     ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
     proxy_feet_slide_ang_z_cmd,
-    proxy_rotation_gait_status,
 )
 
 
@@ -107,8 +107,8 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
     for name, func, weight in (
         ("feet_air_time", proxy_feet_air_time_command_scaled, 10.0),
         ("feet_slide_ang_z_cmd", proxy_feet_slide_ang_z_cmd, -2.0),
-        ("rotation_gait_status", proxy_rotation_gait_status, 2.0),
-        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 15.0),
+        ("rotation_gait_status", ProxyRotationGaitStatus, 2.0),
+        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 3.0),
     ):
         term = getattr(cfg.rewards, name)
         assert term.func is func and term.weight == weight
@@ -182,7 +182,7 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
     env = SimpleNamespace(
         num_envs=n,
         device="cpu",
-        physics_dt=0.0025,
+        physics_dt=cfg.sim.dt,
         cfg=SimpleNamespace(sim=SimpleNamespace(physics=cfg.sim.physics.newton_mjwarp), decimation=cfg.decimation),
         scene=SimpleNamespace(),
     )
@@ -203,8 +203,7 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
         rtol=0,
     )
     assert (calls[0]["forces"][..., 2] > 0).all()
-    assert action.contact_state.contact.all()
-    assert not action.contact_state.touchdown.any()  # initial support is not a completed swing
+    assert not action.contact_state.vertical_contact.any()  # timers wait for the control boundary
     applied = action.force_w.clone()
     torch.testing.assert_close(action.force_history_w[:, 0], applied)
     assert not action.force_history_w[:, 1:].any()
@@ -212,12 +211,39 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
     torch.testing.assert_close(
         proxy_contact_forces(env, threshold=100.0), (applied.norm(dim=-1) - 100).clamp(min=0).sum(dim=1)
     )
+    for _ in range(cfg.decimation - 1):
+        action.apply_actions()
+    assert action.contact_state.vertical_contact.all()
+    assert not action.contact_state.touchdown.any()  # initial support is not a completed swing
+    torch.testing.assert_close(action.contact_state.current_contact_time, torch.full((n, 4), 0.02))
+
+    # Twenty force threshold crossings inside a control period must not become twenty landings.
+    original_step = action.model.step
+
+    def alternating_force(*args, **kwargs):
+        force = torch.zeros_like(action.force_w)
+        force[..., 2] = action.cfg.contact_force_threshold + 10.0 if action._physics_tick % 2 else 0.0
+        return force
+
+    action.model.step = alternating_force
+    action.process_actions(torch.empty((n, 0)))
+    for _ in range(cfg.decimation):
+        action.apply_actions()
+    assert len(calls) == 2 * cfg.decimation  # physical forces still update at every tick
+    assert action.contact_state.vertical_contact.all()
+    assert not action.contact_state.touchdown.any()
+    assert not action.contact_state.current_air_time.any()
+    torch.testing.assert_close(action.contact_state.current_contact_time, torch.full((n, 4), 0.04))
+    action.model.step = original_step
+    applied = action.force_w.clone()
+
     # Lift out of the sand: old applied forces persist for exactly three physics samples.
     pos[..., 2] = 0.6
+    action.process_actions(torch.empty((n, 0)))
     action.apply_actions()
     assert not action.force_w.any()
-    assert not action.contact_state.contact.any()
-    assert (action.contact_state.current_air_time > 0).all()
+    assert action.contact_state.vertical_contact.all()  # no new sample until the control boundary
+    assert not action.contact_state.current_air_time.any()
     torch.testing.assert_close(action.force_history_w[:, 1], applied)
     action.apply_actions()
     torch.testing.assert_close(action.force_history_w[:, 2], applied)
@@ -230,7 +256,10 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
     assert action.contact_state.has_contact[1].all()
     torch.testing.assert_close(action.force_history_w[1], history_other_env)
     assert proxy_contact_forces(env, threshold=0.0)[0] == 0
-    action.apply_actions()
+    for _ in range(cfg.decimation - 2):
+        action.apply_actions()
+    assert not action.contact_state.vertical_contact.any()
+    torch.testing.assert_close(action.contact_state.current_air_time, torch.full((n, 4), 0.02))
     assert not action.force_history_w.any()
     action.reset()
     assert not action.force_history_w.any()

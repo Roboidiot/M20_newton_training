@@ -47,7 +47,8 @@ class FootSandProxyAction(ActionTerm):
         # Match the three-sample history used by the inherited contact-force penalty.
         # Record the actual applied force, including its stability limiter, at each physics tick.
         self.force_history_w = torch.zeros((env.num_envs, 3, 4, 3), device=env.device)
-        self.contact_state = ProxyFootContactState(env.num_envs, env.device, env.cfg.decimation)
+        self.contact_state = ProxyFootContactState(env.num_envs, env.device)
+        self._physics_tick = 0
         self.application_points_w = torch.zeros_like(self.force_w)
         self.effective_mass = self._asset.data.default_mass.torch.sum(dim=1, keepdim=True) / 4
 
@@ -65,6 +66,7 @@ class FootSandProxyAction(ActionTerm):
 
     def process_actions(self, actions):
         self.contact_state.begin_step()
+        self._physics_tick = 0
 
     @torch.no_grad()
     def apply_actions(self):
@@ -107,7 +109,13 @@ class FootSandProxyAction(ActionTerm):
         )
         self.force_history_w.copy_(self.force_history_w.roll(1, dims=1))
         self.force_history_w[:, 0].copy_(self.force_w)
-        self.contact_state.update(self.force_w, self._env.physics_dt, self.cfg.contact_force_threshold)
+        self._physics_tick += 1
+        if self._physics_tick == self._env.cfg.decimation:
+            # Match newton-terrain: sample the last applied force once per 20 ms
+            # control interval. Physical sand forces still update at every tick.
+            self.contact_state.update(
+                self.force_w, self._env.physics_dt * self._env.cfg.decimation, self.cfg.contact_force_threshold
+            )
         self.application_points_w.copy_(point)
         # Composer adds r x F about each wheel CoM. No duplicate explicit torque is supplied.
         self._asset.instantaneous_wrench_composer.add_forces_and_torques_index(
