@@ -61,5 +61,5 @@ class DeeproboticsM20WalkEnvCfg(DeeproboticsM20FlatEnvCfg):
             asset_name=command.asset_name,
             ranges=replace(command.ranges),
             debug_vis=command.debug_vis,
-            keyboard_speeds=(1.5, 0.8, 0.5),
+            keyboard_speeds=(0.4, 0.0, 0.0),
         )

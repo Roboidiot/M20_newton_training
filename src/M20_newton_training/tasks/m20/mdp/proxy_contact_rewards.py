@@ -150,34 +150,33 @@ def proxy_hipx_symmetry_l2(
     return pair_sums.square().mean(dim=1) * scale
 
 
-class ProxyDiagonalLiftConsistency(ManagerTermBase):
-    """Compare completed diagonal swings, never simultaneous stance/swing heights.
+class ProxyFootLiftConsistency(ManagerTermBase):
+    """Compare four independently completed foot swings, regardless of gait pairing.
 
-    Record each foot's maximum lift from its support position at swing start.
-    A sample starts only with both diagonal feet unloaded and the opposite pair
-    supporting. Initial drops, flights and swings shorter than min_air_time are
-    ignored. Once both groups have a fresh completed sample, score within-pair
-    and between-pair differences once, then consume both samples. Command changes
-    preserve history while active; low commands and environment resets clear it per world.
+    Each foot records its own liftoff support height, peak relative lift and
+    touchdown. Once all four have fresh valid samples, score their squared
+    deviation from their mean once and consume all samples. No diagonal support
+    pattern or simultaneous liftoff/touchdown is required. Flights, initial drops
+    and short swings are ignored; low commands and partial resets clear history.
     """
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         if cfg.params.get("height_scale", 0.25) <= 0:
             raise ValueError("height_scale must be positive")
-        if cfg.params.get("min_air_time", 0.1) < 0 or cfg.params.get("max_pair_age_s", 2.0) <= 0:
-            raise ValueError("min_air_time must be nonnegative and max_pair_age_s must be positive")
+        if cfg.params.get("min_air_time", 0.1) < 0 or cfg.params.get("max_sample_age_s", 4.0) <= 0:
+            raise ValueError("min_air_time must be nonnegative and max_sample_age_s must be positive")
         shape = (env.num_envs, 4)
         self.support_height = torch.zeros(shape, device=env.device)
         self.support_seen = torch.zeros(shape, dtype=torch.bool, device=env.device)
+        self.previous_contact = torch.zeros_like(self.support_seen)
         self.swing_origin = torch.zeros(shape, device=env.device)
         self.peak_height = torch.zeros(shape, device=env.device)
         self.completed_height = torch.zeros(shape, device=env.device)
-        pairs = (env.num_envs, 2)
-        self.swing_active = torch.zeros(pairs, dtype=torch.bool, device=env.device)
-        self.swing_valid = torch.zeros_like(self.swing_active)
-        self.swing_steps = torch.zeros(pairs, dtype=torch.long, device=env.device)
-        self.pending = torch.zeros_like(self.swing_active)
+        self.swing_active = torch.zeros_like(self.support_seen)
+        self.swing_valid = torch.zeros_like(self.support_seen)
+        self.swing_steps = torch.zeros(shape, dtype=torch.long, device=env.device)
+        self.pending = torch.zeros_like(self.support_seen)
         self.pending_steps = torch.zeros_like(self.swing_steps)
 
     def reset(self, env_ids=None):
@@ -185,6 +184,7 @@ class ProxyDiagonalLiftConsistency(ManagerTermBase):
         for value in (
             self.support_height,
             self.support_seen,
+            self.previous_contact,
             self.swing_origin,
             self.peak_height,
             self.completed_height,
@@ -199,11 +199,9 @@ class ProxyDiagonalLiftConsistency(ManagerTermBase):
     def __call__(
         self,
         env,
-        group_a_body_names,
-        group_b_body_names,
         height_scale=0.25,
         min_air_time=0.1,
-        max_pair_age_s=2.0,
+        max_sample_age_s=4.0,
         action_term_name="sand_proxy",
         command_name="base_velocity",
         min_command_norm=0.1,
@@ -213,49 +211,37 @@ class ProxyDiagonalLiftConsistency(ManagerTermBase):
         term = env.action_manager.get_term(action_term_name)
         contact = term.contact_state.vertical_contact
         height = term.application_points_w[..., 2]
-        a, b = _group_ids(term, group_a_body_names), _group_ids(term, group_b_body_names)
-        patterns = _diagonal_patterns(contact, a, b)
         minimum_steps = max(1, math.ceil(min_air_time / env.step_dt - 1e-6))
-        maximum_age_steps = max(1, math.floor(max_pair_age_s / env.step_dt + 1e-6))
+        maximum_age_steps = max(1, math.floor(max_sample_age_s / env.step_dt + 1e-6))
         self.pending_steps.add_(self.pending)
         self.pending &= self.pending_steps <= maximum_age_steps
         supported = contact & gate[:, None]
         self.support_height.copy_(torch.where(supported, height, self.support_height))
         self.support_seen |= supported
-        flight = ~contact.any(dim=1)
-        for i, swing in enumerate((a, b)):
-            supported = contact[:, swing].all(dim=1)
-            start = patterns[:, 1 - i] & ~self.swing_active[:, i] & self.support_seen[:, swing].all(dim=1) & gate
-            self.swing_origin[:, swing] = torch.where(
-                start[:, None], self.support_height[:, swing], self.swing_origin[:, swing]
-            )
-            self.peak_height[:, swing] = torch.where(start[:, None], 0.0, self.peak_height[:, swing])
-            self.swing_steps[:, i] = torch.where(start, 0, self.swing_steps[:, i])
-            self.swing_valid[:, i] |= start
-            self.swing_active[:, i] |= start
-            active = self.swing_active[:, i]
-            self.swing_steps[:, i].add_(active)
-            self.swing_valid[:, i] &= ~(active & flight)
-            lift = (height[:, swing] - self.swing_origin[:, swing]).clamp_min(0)
-            self.peak_height[:, swing] = torch.where(
-                active[:, None] & ~contact[:, swing],
-                torch.maximum(self.peak_height[:, swing], lift),
-                self.peak_height[:, swing],
-            )
-            finished = active & supported
-            completed = finished & self.swing_valid[:, i] & (self.swing_steps[:, i] >= minimum_steps)
-            self.completed_height[:, swing] = torch.where(
-                completed[:, None], self.peak_height[:, swing], self.completed_height[:, swing]
-            )
-            self.pending[:, i] |= completed
-            self.pending_steps[:, i] = torch.where(completed, 0, self.pending_steps[:, i])
-            self.swing_active[:, i] &= ~finished
-            self.swing_valid[:, i] &= ~finished
+        has_support = contact.any(dim=1, keepdim=True)
+        start = self.previous_contact & ~contact & ~self.swing_active & gate[:, None] & has_support
+        self.swing_origin.copy_(torch.where(start, self.support_height, self.swing_origin))
+        self.peak_height.copy_(torch.where(start, 0.0, self.peak_height))
+        self.swing_steps.copy_(torch.where(start, 0, self.swing_steps))
+        self.swing_active |= start
+        self.swing_valid |= start
+        self.swing_steps.add_(self.swing_active)
+        self.swing_valid &= ~(self.swing_active & ~has_support)
+        lift = (height - self.swing_origin).clamp_min(0)
+        self.peak_height.copy_(
+            torch.where(self.swing_active & ~contact, torch.maximum(self.peak_height, lift), self.peak_height)
+        )
+        finished = self.swing_active & contact
+        completed = finished & self.swing_valid & (self.swing_steps >= minimum_steps)
+        self.completed_height.copy_(torch.where(completed, self.peak_height, self.completed_height))
+        self.pending |= completed
+        self.pending_steps.copy_(torch.where(completed, 0, self.pending_steps))
+        self.swing_active &= ~finished
+        self.swing_valid &= ~finished
+        self.previous_contact.copy_(supported)
         ready = self.pending.all(dim=1) & gate
-        ha, hb = self.completed_height[:, a], self.completed_height[:, b]
-        within = 0.5 * ((ha[:, 0] - ha[:, 1]).square() + (hb[:, 0] - hb[:, 1]).square())
-        between = (ha.mean(dim=1) - hb.mean(dim=1)).square()
-        penalty = ((within + between) / height_scale**2).clamp(max=4.0)
+        deviations = self.completed_height - self.completed_height.mean(dim=1, keepdim=True)
+        penalty = (deviations.square().sum(dim=1) / height_scale**2).clamp(max=4.0)
         self.pending[ready] = False
         self.pending_steps[ready] = 0
         return torch.where(ready, penalty, 0.0)
@@ -359,3 +345,97 @@ class ProxyRotationGaitSymmetry(ManagerTermBase):
         # Unfilled slots are zero: the score warms up without counting pre-reset history.
         occupancy = self.pattern_buffer.mean(dim=2)
         return 2.0 * torch.sqrt(occupancy[:, 0] * occupancy[:, 1])
+
+
+def _single_swing_patterns(contact):
+    """One slot per ordered proxy foot: exactly that foot unloaded and the other three supported."""
+    return ~contact & (contact.sum(dim=1, keepdim=True) == 3)
+
+
+class ProxyCrawlGaitStatus(ManagerTermBase):
+    """Reward new single-foot lift progress while all three other feet support.
+
+    Heights are calibrated capsule bottoms relative to each foot's last support
+    height, including support below the sand surface. There is no surface-clearance
+    condition or phase clock. Each foot earns at most one unit per swing; support
+    resets its credited progress. Initial drops and low commands earn no credit.
+    """
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        target = cfg.params.get("target_height", 0.30)
+        if not math.isfinite(target) or target <= 0:
+            raise ValueError("target_height must be finite and positive")
+        self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
+        self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
+        self.peak_progress = torch.zeros_like(self.support_height)
+
+    def reset(self, env_ids=None):
+        ids = slice(None) if env_ids is None else env_ids
+        for value in (self.support_height, self.support_seen, self.peak_progress):
+            value[ids] = 0
+
+    def __call__(
+        self,
+        env,
+        target_height=0.30,
+        action_term_name="sand_proxy",
+        command_name="base_velocity",
+        min_command_norm=0.1,
+    ):
+        gate = _gait_command_gate(env, command_name, min_command_norm)
+        self.reset(~gate)
+        term = env.action_manager.get_term(action_term_name)
+        contact = term.contact_state.vertical_contact
+        height = term.application_points_w[..., 2]
+        supported = contact & gate[:, None]
+        self.support_height.copy_(torch.where(supported, height, self.support_height))
+        self.support_seen |= supported
+        self.peak_progress.masked_fill_(contact, 0.0)
+        valid = _single_swing_patterns(contact) & self.support_seen & gate[:, None]
+        progress = ((height - self.support_height) / target_height).clamp(0.0, 1.0)
+        increment = (progress - self.peak_progress).clamp_min(0.0)
+        self.peak_progress.copy_(torch.where(valid, torch.maximum(self.peak_progress, progress), self.peak_progress))
+        return (increment * valid).sum(dim=1)
+
+
+class ProxyCrawlGaitSymmetry(ManagerTermBase):
+    """Balance the four three-support/one-swing states within a sliding window.
+
+    Score is 4*(p_FL*p_FR*p_HL*p_HR)**0.25: all four states must occur to earn
+    credit; balanced full-window occupancy scores one. Other contact patterns
+    occupy the window but earn no state credit. No fixed cycle or order is imposed.
+    """
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        window = cfg.params.get("window_s", 2.0)
+        if not math.isfinite(window) or window <= 0:
+            raise ValueError("window_s must be finite and positive")
+        self.buffer_size = max(1, round(window / env.step_dt))
+        self.pattern_buffer = torch.zeros((env.num_envs, 4, self.buffer_size), device=env.device)
+        self.samples = torch.zeros(env.num_envs, device=env.device)
+        self.buffer_idx = 0
+
+    def reset(self, env_ids=None):
+        ids = slice(None) if env_ids is None else env_ids
+        self.pattern_buffer[ids] = 0
+        self.samples[ids] = 0
+
+    def __call__(
+        self,
+        env,
+        window_s=2.0,
+        action_term_name="sand_proxy",
+        command_name="base_velocity",
+        min_command_norm=0.1,
+    ):
+        gate = _gait_command_gate(env, command_name, min_command_norm)
+        self.reset(~gate)
+        term = env.action_manager.get_term(action_term_name)
+        patterns = _single_swing_patterns(term.contact_state.vertical_contact) & gate[:, None]
+        self.pattern_buffer[:, :, self.buffer_idx] = patterns
+        self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
+        self.samples.add_(gate).clamp_(max=self.buffer_size)
+        occupancy = self.pattern_buffer.mean(dim=2)
+        return 4.0 * occupancy.prod(dim=1).pow(0.25)

@@ -101,7 +101,7 @@ class DeeproboticsM20WalkOnSandEnvCfg(DeeproboticsM20WalkEnvCfg):
             ),
         )
         pose_range = cast(dict[str, tuple[float, float]], self.events.randomize_reset_base.params["pose_range"])
-        pose_range.update(x=(0.0, 0.0), y=(0.0, 0.0), roll=(-0.1, 0.1), pitch=(-0.1, 0.1))
+        pose_range.update(x=(0.0, 0.0), y=(0.0, 0.0), roll=(-0.0, 0.0), pitch=(-0.0, 0.0))
 
         # MJWarp+MPM cannot expose contact forces/timing to ContactSensor. Keep the old functions unchanged
         # and disable every active reader until a calibrated contact proxy is introduced.

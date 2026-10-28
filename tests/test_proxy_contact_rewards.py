@@ -5,12 +5,18 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from isaaclab.managers import RewardTermCfg
 from isaaclab.utils import to_dict
 
-from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import DeeproboticsM20WalkOnSandProxyEnvCfg
+from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import (
+    DeeproboticsM20WalkOnSandProxyEnvCfg,
+    FootProxyRewardsCfg,
+)
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
-    ProxyDiagonalLiftConsistency,
+    ProxyCrawlGaitStatus,
+    ProxyCrawlGaitSymmetry,
     ProxyFootContactState,
+    ProxyFootLiftConsistency,
     ProxyRotationGaitStatus,
     ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
@@ -22,6 +28,9 @@ from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
 def _env():
     commands = torch.tensor([[0.2, 0, 0], [0, -0.15, 0], [0, 0, -0.3], [0, 0.15, 0.3], [-0.2, 0, 0]])
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
+    # Height consistency is disabled in the task; exercise its reusable implementation independently.
+    cfg.rewards.feet_lift_consistency = FootProxyRewardsCfg().feet_lift_consistency
+    cfg.rewards.feet_lift_consistency.params.update(command_name="base_velocity", min_command_norm=0.1)
     n = len(commands)
     state = ProxyFootContactState(n, "cpu")
     # Intentionally permute articulation body slots relative to ordered proxy feet.
@@ -195,33 +204,33 @@ def test_rotation_lift_rewards_both_feet_relative_to_support_and_only_new_progre
     env = _env()
     cfg = env.cfg.rewards.rotation_gait_status
     reward = ProxyRotationGaitStatus(cfg, env)
-    assert cfg.params["target_height"] == 0.25
+    target = cfg.params["target_height"]
     height = env.term.application_points_w[..., 2]
     height[:] = -0.15  # swing may begin below the reference sand surface
     _support(env, [0, 1, 2, 3])
     assert not reward(env, **cfg.params).any()
-    # FR rises 50 cm, but HL only 5 cm: paired progress must follow the lower foot.
-    height[:, 1] += 0.50
-    height[:, 2] += 0.05
+    # The lower foot controls progress, even if its paired foot exceeds the target.
+    height[:, 1] += 2 * target
+    height[:, 2] += 0.2 * target
     _support(env, [0, 3])
     torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.2))
     assert env.term.contact_state.contact.all()
     assert not reward(env, **cfg.params).any()  # hovering is not rewarded again
-    height[:, 2] -= 0.05
+    height[:, 2] -= 0.2 * target
     assert not reward(env, **cfg.params).any()
-    height[:, 2] += 0.05
+    height[:, 2] += 0.2 * target
     assert not reward(env, **cfg.params).any()  # revisiting an already credited height
-    height[:, 2] += 0.10
+    height[:, 2] += 0.4 * target
     torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.4))
-    height[:, 2] += 0.50
+    height[:, 2] += 2 * target
     torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.4))
-    assert not reward(env, **cfg.params).any()  # capped at 25 cm per foot
+    assert not reward(env, **cfg.params).any()  # capped at the configured target per foot
     _support(env, [0, 1, 2, 3])
     assert not reward(env, **cfg.params).any()
     # A new swing starts at the new support height, not at an old world-Z anchor.
     _support(env, [0, 3])
     assert not reward(env, **cfg.params).any()
-    height[:, [1, 2]] += 0.125
+    height[:, [1, 2]] += 0.5 * target
     torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.5))
 
 
@@ -250,13 +259,17 @@ def test_rotation_lift_requires_support_after_reset_and_tracks_opposite_swing():
     reward(env, **cfg.params)
     _support(env, [1, 2])
     env.term.application_points_w[:, [0, 3], 2] += 0.02
-    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.08))
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.full((env.num_envs,), 0.02 / cfg.params["target_height"])
+    )
     other_anchor = reward.support_height[3].clone()
     reward.reset([2])
     assert not reward.support_seen[2].any() and not reward.peak_progress[2].any()
     torch.testing.assert_close(reward.support_height[3], other_anchor)
     env.term.application_points_w[:, [0, 3], 2] += 0.02
-    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0.08, 0.08, 0, 0.08, 0.08]))
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.tensor([1, 1, 0, 1, 1]) * (0.02 / cfg.params["target_height"])
+    )
     reward.reset()
     assert not reward.support_seen.any() and not reward.peak_progress.any()
 
@@ -269,14 +282,18 @@ def test_rotation_lift_preserves_support_and_credited_progress_across_command_ch
     reward(env, **cfg.params)
     _support(env, [0, 3])
     env.term.application_points_w[:, [1, 2], 2] += 0.05
-    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.2))
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.full((env.num_envs,), 0.05 / cfg.params["target_height"])
+    )
     anchors = reward.support_height.clone()
     env.commands[:] = torch.tensor([[0, 0.15, 0], [-0.4, 0, 0], [0.1, 0, 0], [0, 0, -0.3], [0.4, 0.15, 0.5]])
     assert not reward(env, **cfg.params).any()  # changing direction cannot re-credit the same height
     torch.testing.assert_close(reward.support_height, anchors)
     assert reward.support_seen.all()
     env.term.application_points_w[:, [1, 2], 2] += 0.05
-    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.2))
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.full((env.num_envs,), 0.05 / cfg.params["target_height"])
+    )
 
 
 def test_turn_sliding_uses_force_history_and_preserves_body_frame_definition():
@@ -302,13 +319,13 @@ def test_symmetry_scores_real_opposing_diagonals_and_partial_reset():
     cfg = env.cfg.rewards.rotation_gait_symmetry
     reward = ProxyRotationGaitSymmetry(cfg, env)
     before = to_dict(env.cfg)
-    assert reward.buffer_size == 50  # 1 s at the 50 Hz reward rate
-    for i in range(50):
+    assert reward.buffer_size == 100  # 2 s at the 50 Hz reward rate
+    for i in range(reward.buffer_size):
         _support(env, [0, 3] if i % 2 == 0 else [1, 2])
         assert env.term.contact_state.contact.all()
         result = reward(env, **cfg.params)
     torch.testing.assert_close(result, torch.ones(env.num_envs))
-    torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), 50.0))
+    torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), float(reward.buffer_size)))
     other = reward.pattern_buffer[3].clone()
     reward.reset([2])
     assert reward.samples[2] == 0 and not reward.pattern_buffer[2].any()
@@ -358,14 +375,14 @@ def test_symmetry_preserves_window_for_straight_sideways_and_reversed_active_com
     env.commands[:] = torch.tensor([[0, 0, 0.1], [0.5, 0, 0.3], [0, 0, -0.3], [0.2, 0, 0.3], [0.1, 0, 0]])
     cfg = env.cfg.rewards.rotation_gait_symmetry
     reward = ProxyRotationGaitSymmetry(cfg, env)
-    for i in range(50):
+    for i in range(reward.buffer_size):
         _support(env, [0, 3] if i % 2 == 0 else [1, 2])
         result = reward(env, **cfg.params)
     torch.testing.assert_close(result, torch.ones(env.num_envs))
     env.commands[:] = torch.tensor([[0.4, 0, 0], [0, -0.15, 0], [0.1, 0, 0], [0, 0, -0.3], [0, 0, 0.5]])
     _support(env, [0, 3])
     torch.testing.assert_close(reward(env, **cfg.params), torch.ones(env.num_envs))
-    torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), 50.0))
+    torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), float(reward.buffer_size)))
     _support(env, [1, 2])
     torch.testing.assert_close(reward(env, **cfg.params), torch.ones(env.num_envs))
 
@@ -406,10 +423,10 @@ def _completed_swing(env, reward, params, swing, lifts, steps=4, flight=False):
         ([1.0, 1.0], [0.0, 0.0], 4.0),
     ],
 )
-def test_lift_consistency_compares_completed_relative_peaks_within_and_between_diagonals(lifts_a, lifts_b, expected):
+def test_lift_consistency_compares_four_relative_peaks_and_preserves_old_cost_scale(lifts_a, lifts_b, expected):
     env = _env()
-    cfg = env.cfg.rewards.diagonal_lift_consistency
-    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
     env.term.application_points_w[..., 2] = torch.tensor([-0.25, -0.05, -0.1, -0.2])
     _support(env, [0, 1, 2, 3])
     assert not reward(env, **cfg.params).any()
@@ -424,26 +441,27 @@ def test_lift_consistency_compares_completed_relative_peaks_within_and_between_d
 @pytest.mark.parametrize(("steps", "flight"), [(1, False), (4, True)])
 def test_lift_consistency_ignores_short_touches_and_all_feet_flight(steps, flight):
     env = _env()
-    cfg = env.cfg.rewards.diagonal_lift_consistency
-    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
     _support(env, [0, 1, 2, 3])
     reward(env, **cfg.params)
     assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25], steps, flight).any()
     assert not reward.pending.any()
     assert not _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05]).any()
-    assert not reward.pending[:, 0].any() and reward.pending[:, 1].all()
+    assert not reward.pending[:, [0, 3]].any() and reward.pending[:, [1, 2]].all()
 
 
 def test_lift_consistency_ignores_initial_drop_and_expires_old_samples():
     env = _env()
-    cfg = env.cfg.rewards.diagonal_lift_consistency
-    reward = ProxyDiagonalLiftConsistency(cfg, env)
-    # No observed support for the first pair: an initial drop must not become a swing.
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
+    cfg.params["max_sample_age_s"] = 0.1
+    # No observed support for the first feet: an initial drop must not become a swing.
     assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25]).any()
     assert not reward.pending.any()
     assert not _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25]).any()
-    assert reward.pending[:, 0].all()
-    for _ in range(101):
+    assert reward.pending[:, [0, 3]].all()
+    for _ in range(6):
         assert not reward(env, **cfg.params).any()
     assert not reward.pending.any()
     assert not _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05]).any()
@@ -451,14 +469,14 @@ def test_lift_consistency_ignores_initial_drop_and_expires_old_samples():
 
 def test_lift_consistency_partial_reset_clears_pending_and_support_only_in_selected_world():
     env = _env()
-    cfg = env.cfg.rewards.diagonal_lift_consistency
-    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
     _support(env, [0, 1, 2, 3])
     reward(env, **cfg.params)
     _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25])
     reward.reset([0])
     assert not reward.support_seen[0].any() and not reward.pending[0].any()
-    assert reward.pending[1:, 0].all()
+    assert reward.pending[1:, [0, 3]].all()
     result = _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05])
     torch.testing.assert_close(result, torch.tensor([0.0, 0.64, 0.64, 0.64, 0.64]))
     reward.reset()
@@ -494,7 +512,7 @@ def test_lift_gate_respects_command_norm_and_reactivation_requires_new_support()
     _support(env, [0, 1, 2, 3])
     reward(env, **cfg.params)
     _support(env, [0, 3])
-    env.term.application_points_w[:, [1, 2], 2] += 0.125
+    env.term.application_points_w[:, [1, 2], 2] += 0.5 * cfg.params["target_height"]
     torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0, 0, 0.5, 0.5, 0.5]))
     env.commands[2] = 0
     assert not reward(env, **cfg.params).any()
@@ -502,7 +520,7 @@ def test_lift_gate_respects_command_norm_and_reactivation_requires_new_support()
     assert reward.support_seen[3:].all()
     env.commands[2] = torch.tensor([0.1, 0, 0])
     assert not reward(env, **cfg.params).any()  # no carry-over swing after waiting below threshold
-    env.term.application_points_w[:, [1, 2], 2] += 0.025
+    env.term.application_points_w[:, [1, 2], 2] += 0.1 * cfg.params["target_height"]
     torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0, 0, 0, 0.1, 0.1]))
 
 
@@ -511,7 +529,7 @@ def test_symmetry_gate_clears_only_inactive_worlds_and_warms_up_after_reactivati
     _set_command_gate_cases(env)
     cfg = env.cfg.rewards.rotation_gait_symmetry
     reward = ProxyRotationGaitSymmetry(cfg, env)
-    for i in range(50):
+    for i in range(reward.buffer_size):
         _support(env, [0, 3] if i % 2 == 0 else [1, 2])
         result = reward(env, **cfg.params)
     torch.testing.assert_close(result, torch.tensor([0, 0, 1.0, 1.0, 1.0]))
@@ -523,21 +541,215 @@ def test_symmetry_gate_clears_only_inactive_worlds_and_warms_up_after_reactivati
     env.commands[2] = torch.tensor([0.1, 0, 0])
     assert reward(env, **cfg.params)[2] == 0
     _support(env, [1, 2])
-    torch.testing.assert_close(reward(env, **cfg.params)[2], torch.tensor(0.04))
+    torch.testing.assert_close(reward(env, **cfg.params)[2], torch.tensor(2.0 / reward.buffer_size))
 
 
 def test_lift_consistency_gate_disables_low_commands_and_drops_pending_samples():
     env = _env()
     _set_command_gate_cases(env)
-    cfg = env.cfg.rewards.diagonal_lift_consistency
-    reward = ProxyDiagonalLiftConsistency(cfg, env)
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
     _support(env, [0, 1, 2, 3])
     reward(env, **cfg.params)
     _completed_swing(env, reward, cfg.params, [0, 3], [0.25, 0.25])
-    assert not reward.pending[:2].any() and reward.pending[2:, 0].all()
+    assert not reward.pending[:2].any() and reward.pending[2:, [0, 3]].all()
     env.commands[2] = 0
     assert not reward(env, **cfg.params).any()
     assert not reward.pending[2].any() and not reward.support_seen[2].any()
     env.commands[2] = torch.tensor([0.1, 0, 0])
     result = _completed_swing(env, reward, cfg.params, [1, 2], [0.05, 0.05])
     torch.testing.assert_close(result, torch.tensor([0, 0, 0, 0.64, 0.64]))
+
+
+@pytest.mark.parametrize("order", [[0, 1, 2, 3], [0, 3, 1, 2], [3, 2, 1, 0]])
+def test_foot_lift_consistency_accepts_single_foot_crawl_in_any_order(order):
+    env = _env()
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    lifts = [0.1, 0.15, 0.2, 0.25]
+    for foot in order[:-1]:
+        assert not _completed_swing(env, reward, cfg.params, [foot], [lifts[foot]]).any()
+    result = _completed_swing(env, reward, cfg.params, [order[-1]], [lifts[order[-1]]])
+    torch.testing.assert_close(result, torch.full((env.num_envs,), 0.2))
+    assert not reward.pending.any()
+    assert not reward(env, **cfg.params).any()
+
+
+def test_foot_lift_consistency_tracks_staggered_diagonal_liftoffs_and_landings_independently():
+    env = _env()
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    for _ in range(2):
+        _support(env, [1, 2, 3])
+        height[:, 0] = 0.1
+        assert not reward(env, **cfg.params).any()
+    for _ in range(2):
+        _support(env, [1, 2])
+        height[:, 3] = 0.25
+        assert not reward(env, **cfg.params).any()
+    _support(env, [0, 1, 2])
+    height[:, 0] = 0
+    assert not reward(env, **cfg.params).any()
+    assert reward.pending[:, 0].all() and not reward.pending[:, 3].any()
+    assert reward.swing_active[:, 3].all()
+    assert not reward(env, **cfg.params).any()
+    _support(env, [0, 1, 2, 3])
+    height[:, 3] = 0
+    assert not reward(env, **cfg.params).any()
+    assert reward.pending[:, [0, 3]].all()
+    assert not _completed_swing(env, reward, cfg.params, [1], [0.15]).any()
+    result = _completed_swing(env, reward, cfg.params, [2], [0.2])
+    torch.testing.assert_close(result, torch.full((env.num_envs,), 0.2))
+
+
+def test_foot_lift_consistency_waits_for_all_feet_and_uses_latest_completed_sample():
+    env = _env()
+    cfg = env.cfg.rewards.feet_lift_consistency
+    reward = ProxyFootLiftConsistency(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    assert not _completed_swing(env, reward, cfg.params, [0], [0.25]).any()
+    assert not _completed_swing(env, reward, cfg.params, [0], [0.15]).any()
+    assert not _completed_swing(env, reward, cfg.params, [1], [0.15]).any()
+    assert not _completed_swing(env, reward, cfg.params, [2], [0.15]).any()
+    result = _completed_swing(env, reward, cfg.params, [3], [0.15])
+    assert not result.any()
+    assert not reward.pending.any()
+
+
+def _crawl_reward(env, cls, **params):
+    cfg = RewardTermCfg(
+        func=cls,
+        weight=1.0,
+        params={"action_term_name": "sand_proxy", "command_name": "base_velocity", "min_command_norm": 0.1,
+                **params},
+    )
+    return cls(cfg, env), cfg.params
+
+
+@pytest.mark.parametrize("swing", range(4))
+def test_crawl_lift_uses_each_ordered_foot_support_height_and_only_new_capped_progress(swing):
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus, target_height=0.30)
+    height = env.term.application_points_w[..., 2]
+    height[:] = -0.4  # Entire test may stay below the sand surface; no clearance condition.
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **params).any()
+    _support(env, [i for i in range(4) if i != swing])
+    height[:, swing] += 0.06
+    torch.testing.assert_close(reward(env, **params), torch.full((env.num_envs,), 0.2))
+    assert env.term.contact_state.contact.all()  # Full-force magnitude is deliberately misleading.
+    assert not reward(env, **params).any()
+    height[:, swing] -= 0.03
+    assert not reward(env, **params).any()
+    height[:, swing] += 0.03
+    assert not reward(env, **params).any()
+    height[:, swing] += 0.12
+    torch.testing.assert_close(reward(env, **params), torch.full((env.num_envs,), 0.4))
+    height[:, swing] += 0.6
+    torch.testing.assert_close(reward(env, **params), torch.full((env.num_envs,), 0.4))
+    assert not reward(env, **params).any()
+    height[:, swing] = -0.2
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **params).any()
+    _support(env, [i for i in range(4) if i != swing])
+    height[:, swing] += 0.15
+    torch.testing.assert_close(reward(env, **params), torch.full((env.num_envs,), 0.5))
+
+
+@pytest.mark.parametrize("feet", [[0, 1, 2, 3], [0, 3], [0], []])
+def test_crawl_lift_rejects_every_support_count_except_three(feet):
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **params)
+    env.term.application_points_w[..., 2] = 0.3
+    _support(env, feet)
+    assert not reward(env, **params).any()
+
+
+def test_crawl_lift_requires_observed_support_and_clears_only_reset_or_inactive_worlds():
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus)
+    height = env.term.application_points_w[..., 2]
+    _support(env, [1, 2, 3])
+    height[:, 0] = 0.15
+    assert not reward(env, **params).any()
+    _support(env, [0, 1, 2, 3])
+    reward(env, **params)
+    _support(env, [1, 2, 3])
+    height[:, 0] += 0.15
+    torch.testing.assert_close(reward(env, **params), torch.full((env.num_envs,), 0.5))
+    env.commands *= -1
+    assert not reward(env, **params).any()  # Direction changes cannot re-credit height.
+    reward.reset([2])
+    assert not reward.support_seen[2].any() and not reward.peak_progress[2].any()
+    assert reward.support_seen[0].all()
+    env.commands[0] = 0
+    height[:, 0] += 0.03
+    torch.testing.assert_close(reward(env, **params), torch.tensor([0.0, 0.1, 0.0, 0.1, 0.1]))
+    assert not reward.support_seen[0].any()
+    reward.reset()
+    assert not reward.support_seen.any() and not reward.peak_progress.any()
+
+
+@pytest.mark.parametrize("order", [[0, 1, 2, 3], [3, 1, 0, 2]])
+def test_crawl_phase_balances_all_four_swing_states_without_imposing_order(order):
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitSymmetry)
+    assert reward.buffer_size == 100  # Default 2 s at 50 Hz.
+    for i in range(reward.buffer_size):
+        swing = order[i % 4]
+        _support(env, [foot for foot in range(4) if foot != swing])
+        result = reward(env, **params)
+    torch.testing.assert_close(result, torch.ones(env.num_envs))
+    torch.testing.assert_close(reward.samples, torch.full((env.num_envs,), 100.0))
+    other = reward.pattern_buffer[0].clone()
+    reward.reset([2])
+    assert not reward.pattern_buffer[2].any() and reward.samples[2] == 0
+    torch.testing.assert_close(reward.pattern_buffer[0], other)
+    result = reward(env, **params)
+    assert result[2] == 0 and result[0] > 0.99
+
+
+@pytest.mark.parametrize("feet", [[0, 1, 2, 3], [1, 2, 3], [0, 3], [0], []])
+def test_crawl_phase_rejects_fixed_single_leg_and_non_crawl_patterns(feet):
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitSymmetry)
+    for _ in range(reward.buffer_size + 1):
+        _support(env, feet)
+        assert not reward(env, **params).any()
+
+
+def test_crawl_phase_window_occupancy_warmup_expiry_and_command_gate():
+    env = _env()
+    _set_command_gate_cases(env)
+    reward, params = _crawl_reward(env, ProxyCrawlGaitSymmetry, window_s=0.16)
+    assert reward.buffer_size == 8
+    for swing in range(4):
+        _support(env, [i for i in range(4) if i != swing])
+        result = reward(env, **params)
+    torch.testing.assert_close(result, torch.tensor([0., 0., 0.5, 0.5, 0.5]))
+    for _ in range(4):
+        _support(env, [0, 1, 2, 3])
+        torch.testing.assert_close(reward(env, **params), torch.tensor([0., 0., 0.5, 0.5, 0.5]))
+    env.commands[2] = 0
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **params).any()  # Oldest foot state expired; inactive world also clears.
+    assert not reward.pattern_buffer[2].any() and reward.samples[2] == 0
+    reward.reset()
+    assert not reward.pattern_buffer.any() and not reward.samples.any()
+
+
+@pytest.mark.parametrize(("cls", "params"), [
+    (ProxyCrawlGaitStatus, {"target_height": 0}),
+    (ProxyCrawlGaitSymmetry, {"window_s": -1}),
+])
+def test_crawl_rewards_reject_invalid_scales(cls, params):
+    with pytest.raises(ValueError):
+        _crawl_reward(_env(), cls, **params)

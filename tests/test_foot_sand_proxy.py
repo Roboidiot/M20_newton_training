@@ -18,7 +18,6 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     rotate_xyzw,
 )
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
-    ProxyDiagonalLiftConsistency,
     ProxyRotationGaitStatus,
     ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
@@ -108,13 +107,13 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
         "sand_diagonal_steps",
         "sand_step_completion",
         "undesired_contacts",
+        "feet_lift_consistency",
     ):
         assert getattr(cfg.rewards, name) is None
     for name, func, weight in (
-        ("feet_air_time", proxy_feet_air_time_command_scaled, 5.0),
-        ("rotation_gait_status", ProxyRotationGaitStatus, 10.0),
-        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 3.0),
-        ("diagonal_lift_consistency", ProxyDiagonalLiftConsistency, -3.0),
+        ("feet_air_time", proxy_feet_air_time_command_scaled, 2.0),
+        ("rotation_gait_status", ProxyRotationGaitStatus, 20.0),
+        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 1.0),
     ):
         term = getattr(cfg.rewards, name)
         assert term.func is func and term.weight == weight
@@ -125,9 +124,14 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
     assert cfg.rewards.hipx_symmetry.func is proxy_hipx_symmetry_l2
     assert cfg.rewards.hipx_symmetry.weight == -0.5
     assert cfg.rewards.hipx_symmetry.params["asset_cfg"].preserve_order
-    assert cfg.rewards.rotation_gait_status.params["target_height"] == 0.25
-    assert cfg.rewards.track_lin_vel_xy_exp.weight == 3.0
-    assert cfg.rewards.track_ang_vel_z_exp.weight == 1.5
+    assert cfg.rewards.rotation_gait_status.params["target_height"] == 0.30
+    assert cfg.rewards.track_lin_vel_xy_exp.weight == 5.0
+    assert cfg.rewards.track_ang_vel_z_exp.weight == 2.0
+    assert not hasattr(cfg.rewards, "command_progress")
+    assert not hasattr(cfg.rewards, "forward_foot_placement")
+    for term in vars(cfg.rewards).values():
+        if term is not None:
+            assert not {"clearance_threshold", "target_clearance", "min_movement_scale"} & term.params.keys()
     assert cfg.actions.sand_proxy.contact_force_threshold == 5.0
     for term in vars(cfg.rewards).values():
         if term is not None:

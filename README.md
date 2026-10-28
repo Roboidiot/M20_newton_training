@@ -57,60 +57,56 @@ on the four M20 wheel feet. It keeps Walk's 57/60 observation dimensions, 16 act
 no shin, thigh or belly forces are applied. The deployed parameters are in
 `src/M20_newton_training/sand_proxy/calibrated/m20_foot_sand.json`. The original MPM tasks remain available.
 This task uses plain `newton_mjwarp`, with a virtual sand surface at z=0.30 m and a non-colliding surface
-visual. There are no particles to render. Commands are limited to +/-0.8 m/s forward,
-+/-0.2 m/s sideways and +/-0.6 rad/s turning. Foot forces update at 2 kHz; the policy remains at 50 Hz.
-The task owns physics decimation so Newton cannot fold these state-dependent external forces into one
-policy-step update.
+visual. There are no particles to render. Each environment independently selects exactly one command
+mode every 10 s, with equal probability: forward/backward `abs(vx)=0.16..0.4 m/s`, sideways
+`abs(vy)=0.16..0.3 m/s`, or turning `abs(wz)=0.16..0.4 rad/s`. All three modes use random signs.
+All modes share `min_abs_command=0.16`. The other two components are zero, so command norm is always
+strictly greater than 0.15. `SingleAxisVelocityCommand` in `mdp/single_axis_velocity.py` bypasses
+the shared sampler's <=0.2 m/s zeroing rule. Heading/standing overrides are disabled.
+Foot forces update at 2 kHz; the policy
+and all rewards remain at 50 Hz. The task owns physics decimation so Newton cannot fold these
+state-dependent forces into one policy-step update.
 
-WalkOnSandProxy keeps speed tracking, air-time (+5), actual diagonal lift progress (+10),
-diagonal contact symmetry (+3), body stability, leg torque/acceleration, action rate and wheel-speed costs.
-HipX default-posture weight is -1.5. Its two new symmetry penalties are:
+Only reward weights and training commands are adjusted; the original force-based reward functions
+are used. There are 15 active terms. Linear/yaw tracking weights are +5/+2, both retaining
+`std=0.5` (denominator 0.25). Air-time, diagonal lift progress and diagonal symmetry weights are
++2/+20/+1 respectively. HipX posture/mirroring weights remain -1.5/-0.5 and the straight-command
+wheel-speed cost remains -0.2. `feet_lift_consistency` is temporarily disabled (weight zero), while
+its independent-foot implementation remains available for later use.
 
-- `hipx_symmetry` (-0.5): mean squared FL+FR and HL+HR HipX angle sums in radians. The ordered left/right
-  axes require opposite angles. For abs(vy)>0.05 m/s or abs(wz)>0.1 rad/s the cost is multiplied by 0.25.
-- `diagonal_lift_consistency` (-3): compare completed swings, not simultaneous stance/swing heights.
-  Record each foot's peak lift from its support position at swing start. Let A=(FL,HR), B=(FR,HL),
-  within=0.5*((H_FL-H_HR)^2+(H_FR-H_HL)^2), between=(mean(A)-mean(B))^2.
-  Raw cost is min((within+between)/0.25^2,4). It is settled once after both groups have a fresh completed
-  swing, then both samples are consumed. A swing must begin in a valid diagonal support pattern,
-  last at least 0.1 s (including the sampled landing interval), and contain no all-foot flight.
-  Unmatched samples expire after 2 s. Initial drops are ignored; partial resets clear only that world.
-  For equal within-pair peaks of 25 cm and 5 cm, the raw cost is 0.64 and the weighted 50 Hz event is -0.0384.
+Support means applied upward world-Z proxy force >5 N. Air/contact timers and touchdown events
+sample the last physical force once per 20 ms policy step; horizontal drag and downward pull-out
+forces do not count as support. The first landing after reset is ignored. Air-time credit on
+subsequent touchdowns is `min(unloaded_time,1.0)-0.1`; short air times receive a negative score.
+There is no extra check for leaving the sand surface.
 
-The simplified task disables `contact_forces`, HipY/Knee default-posture penalties,
-`joint_acc_wheel_l2`, and `action_smooth_l2`. `feet_slide_ang_z_cmd`, `joint_mirror`, `stand_still`,
-`undesired_contacts`, `sand_diagonal_steps` and `sand_step_completion` remain disabled.
-Disabling force-excess rewards does not disable the physical sand force or contact timers.
-Air-time tracking and both rotation gait rewards consider a foot supported only when its applied
-upward world-Z force exceeds 5 N; horizontal drag and downward pull-out forces do not count as support.
-Air/contact timers and touchdown detection
-sample the last applied force once per 20 ms policy step (50 Hz), matching newton-terrain's sampling;
-intermediate physics-rate force crossings are not counted. Each foot can produce at most one touchdown
-per policy step. The first landing after reset is ignored, and each environment's timers clear on reset.
-Physical proxy forces still update at 2 kHz. The air-time score uses a 0.1 s threshold and 1.0 s cap;
-touchdowns after less than 0.1 s receive a negative score while stepping is enabled.
-The full command norm sqrt(vx^2+vy^2+wz^2) must be >=0.1 for `feet_air_time`,
-`rotation_gait_status`, `rotation_gait_symmetry`, and `diagonal_lift_consistency` to score.
-Below 0.1 all four terms are zero, including their penalties; the three stateful gait terms clear
-that world's support/progress/pending/window history. Exactly 0.1 remains enabled, including pure yaw.
-HipX posture/mirroring and body stability remain active at low commands; physical contact timers
-continue running. The separate `command_threshold=0.1` still selects side/turn amplification
-(x2/x3, or x4 together). All movement directions are eligible above the norm threshold.
-`rotation_gait_status` rewards only new lift progress of both unloaded diagonal feet, measured from
-individual last-support capsule-bottom heights (25 cm target, weaker foot sets the score). The opposite
-diagonal must support the robot; hovering and revisiting a credited height add no score.
-`rotation_gait_symmetry` uses a 1 s window of true opposing diagonal states and scores
-2*sqrt(p_A*p_B). Fixed support patterns, front-only support and all-four synchronous contacts score zero.
-Each environment clears gait history on reset or when the command norm is below 0.1.
-Changing direction or reversing yaw while remaining above that threshold does not erase support
-anchors, already credited lift progress, or the symmetry window. The 25 cm target is relative
-to each foot's last support position, not an absolute height above the virtual sand surface.
-`joint_mirror` and `stand_still` are disabled in WalkOnSandProxy.
-Non-foot undesired contacts remain disabled because the proxy models only feet. No ContactSensor or
-force observations are added. WalkOnSand's MPM reward configuration is unchanged.
-The robot starts at z=0.88 m, maintaining its 0.58 m initial base clearance above the reference surface.
-The optional proxy-depth termination is currently disabled. The fitted depth-domain marker remains
-0.28 m; deeper inputs retain the model's existing depth clamping.
+`rotation_gait_status` uses `ProxyRotationGaitStatus`: one diagonal must support while the other
+is unloaded. It rewards only new paired lift progress relative to the feet's last support positions,
+with a 30 cm target and the lower-progress foot setting the paired score. Hovering and revisiting
+an already credited height earn nothing. The target is relative to support, not above the sand.
+`rotation_gait_symmetry` uses a 2 s opposing-diagonal occupancy window (100 samples at 50 Hz)
+and the original score `2*sqrt(p_A*p_B)`.
+The full command norm must be >=0.1 for these gait terms and air time to score. Low commands and
+environment resets clear stateful gait histories. Actual body speed does not scale these rewards.
+No body-progress or forward-foot-placement reward is added.
+
+Two optional crawl helpers are available in `mdp/proxy_contact_rewards.py`, but are not enabled in
+the task: `ProxyCrawlGaitStatus` rewards new single-foot lift progress with exactly three other feet
+supporting (default 30 cm relative to last support, at most one raw unit per foot swing).
+`ProxyCrawlGaitSymmetry` balances the four single-swing states in a default 2 s window with
+`4*(p_FL*p_FR*p_HL*p_HR)**0.25`. Its maximum raw score is one; a missing foot state gives zero.
+Both reuse vertical-force contact and the command-norm gate without adding surface-clearance checks,
+fixed timing or a prescribed foot order. Low commands and partial resets clear their histories.
+
+Body stability, leg torque/acceleration, action rate and wheel-speed costs remain enabled.
+`contact_forces`, HipY/Knee posture costs, wheel acceleration, second-order action smoothing,
+sliding, `joint_mirror`, `stand_still`, non-foot undesired contacts, `sand_diagonal_steps` and
+`sand_step_completion` remain disabled. No ContactSensor or force observations are added.
+Walk, Rough and real-MPM WalkOnSand configurations are unchanged. The robot starts at z=0.88 m,
+0.58 m above the virtual surface. The optional proxy-depth termination remains disabled;
+the force model retains its existing fitted-depth clamping marker of 0.28 m.
+Existing checkpoints keep the same 57/60 observations, 16 actions and PPO network architecture.
+New weights affect policy learning only after training continues.
 
 ```bash
 # Start small; scale num_envs after inspecting the policy and measured force-domain coverage.
