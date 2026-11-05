@@ -1,0 +1,15 @@
+{
+  "material": {
+    "density": 1600.0,
+    "friction": 0.75,
+    "damping": 0.0
+  },
+  "mpm": {
+    "max_iterations": 500,
+    "tolerance": 1e-6,
+    "collider_basis": "S2"
+  },
+  "coupling": {
+    "mode": "lagged"
+  }
+}

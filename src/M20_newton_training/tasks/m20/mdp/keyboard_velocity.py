@@ -24,6 +24,9 @@ def read_keyboard_command(viewer, ranges, speeds: tuple[float, float, float]) ->
     command = []
     for (positive, negative), (low, high), speed in zip(pairs, limits, speeds, strict=True):
         direction = int(viewer.is_key_down(positive)) - int(viewer.is_key_down(negative))
+        # Manual control must always include stop. A forward-only training range
+        # must not turn release or the backward key into positive motion.
+        low, high = min(low, 0.0), max(high, 0.0)
         command.append(min(max(direction * speed, low), high))
     return (command[0], command[1], command[2])
 

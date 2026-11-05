@@ -47,6 +47,15 @@ def test_body_axes_and_stop_controls(keys, expected):
     assert read_keyboard_command(_viewer(keys, capturing=True), ranges, cfg.keyboard_speeds) == (0.0, 0.0, 0.0)
 
 
+@pytest.mark.parametrize("limits, keys, expected", [
+    ((.15, .25), (), 0.), ((.15, .25), ("i",), .25), ((.15, .25), ("k",), 0.),
+    ((-.25, -.15), (), 0.), ((-.25, -.15), ("i",), 0.), ((-.25, -.15), ("k",), -.25),
+])
+def test_one_direction_training_ranges_preserve_manual_stop_and_command_sign(limits, keys, expected):
+    ranges = SimpleNamespace(lin_vel_x=limits, lin_vel_y=(0., 0.), ang_vel_z=(0., 0.))
+    assert read_keyboard_command(_viewer(keys), ranges, (.4, .2, .4)) == (expected, 0., 0.)
+
+
 def test_play_mode_preserves_training_observations_and_sensor_configuration():
     cfg = DeeproboticsM20SandEnvCfg()
     observations = to_dict(cfg.observations)

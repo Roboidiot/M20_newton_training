@@ -1,4 +1,4 @@
-"""CPU checks for Walk checkpoint compatibility and command-scaled MPM stepping proxies."""
+"""Walk checkpoint compatibility, shared sand-walking configuration and retained legacy rewards."""
 
 from types import SimpleNamespace
 
@@ -19,52 +19,56 @@ from M20_newton_training.tasks.m20.config.M20.agents.rsl_rl_ppo_cfg import (
 )
 from M20_newton_training.tasks.m20.config.M20.sand_env_cfg import DeeproboticsM20SandEnvCfg
 from M20_newton_training.tasks.m20.config.M20.walk_env_cfg import DeeproboticsM20WalkEnvCfg
-from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import DeeproboticsM20WalkOnSandEnvCfg
+from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import (
+    DeeproboticsM20WalkOnSandEnvCfg,
+    DeeproboticsM20WalkOnSandRewardsCfg,
+)
+from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import DeeproboticsM20WalkOnSandProxyEnvCfg
 from M20_newton_training.tasks.m20.mdp import rewards as shared_rewards
 
-CONTACT_TERMS = {
-    "undesired_contacts",
-    "contact_forces",
-    "feet_air_time",
-    "feet_slide_ang_z_cmd",
-    "rotation_gait_status",
-    "rotation_gait_symmetry",
-}
 
-
-def test_walk_on_sand_keeps_walk_interfaces_and_sand_physics_without_mutating_siblings():
+def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_mutating_siblings():
     before_walk = to_dict(DeeproboticsM20WalkEnvCfg())
     before_sand = to_dict(DeeproboticsM20SandEnvCfg())
+    before_proxy = to_dict(DeeproboticsM20WalkOnSandProxyEnvCfg())
     cfg = DeeproboticsM20WalkOnSandEnvCfg()
     walk = DeeproboticsM20WalkEnvCfg()
     sand = DeeproboticsM20SandEnvCfg()
+    proxy = DeeproboticsM20WalkOnSandProxyEnvCfg()
     assert before_walk == to_dict(walk)
     assert before_sand == to_dict(sand)
+    assert before_proxy == to_dict(proxy)
     assert to_dict(cfg.observations) == to_dict(walk.observations)
-    assert to_dict(cfg.actions) == to_dict(walk.actions)
-    assert to_dict(cfg.commands) == to_dict(walk.commands)
+    assert to_dict(cfg.actions.joint_pos) == to_dict(walk.actions.joint_pos)
+    assert to_dict(cfg.actions.joint_vel) == to_dict(walk.actions.joint_vel)
+    assert not hasattr(cfg.actions, "sand_proxy")
+    assert to_dict(cfg.commands) == to_dict(proxy.commands)
     assert to_dict(cfg.terminations) == to_dict(walk.terminations)
-    assert to_dict(cfg.sim.physics) == to_dict(sand.sim.physics)
+    physics = to_dict(cfg.sim.physics)
+    physics["newton_sand"]["use_cuda_graph"] = True
+    physics["default"]["use_cuda_graph"] = True
+    assert physics == to_dict(sand.sim.physics)
     for name in ("sand", "sand_tray_floor", "sand_tray_north", "sand_tray_south", "sand_tray_east", "sand_tray_west"):
         assert to_dict(getattr(cfg.scene, name)) == to_dict(getattr(sand.scene, name))
     assert cfg.scene.env_spacing == sand.scene.env_spacing
-    assert cfg.scene.robot.init_state.pos == sand.scene.robot.init_state.pos
-    assert cfg.events.randomize_reset_base.params == sand.events.randomize_reset_base.params
+    assert to_dict(cfg.scene.robot.init_state) == to_dict(proxy.scene.robot.init_state)
+    assert to_dict(cfg.events) == to_dict(proxy.events)
     assert cfg.scene.height_scanner is None
     assert to_dict(cfg.scene.height_scanner_base) == to_dict(walk.scene.height_scanner_base)
     assert cfg.scene.contact_forces is None
+    assert cfg.sim.dt * cfg.decimation == proxy.sim.dt * proxy.decimation == 0.02
+    assert cfg.actions.mpm_contact.contact_force_threshold == proxy.actions.sand_proxy.contact_force_threshold == 5.0
     assert cfg.reward_gait_level == 1.0
     assert cfg.curriculum.terrain_levels is None
     assert cfg.curriculum.gait_level is None
-
-    for name in CONTACT_TERMS:
-        assert getattr(cfg.rewards, name) is None
-        assert getattr(walk.rewards, name) is not None
-    for name, term in vars(walk.rewards).items():
-        if name not in CONTACT_TERMS:
-            assert to_dict(getattr(cfg.rewards, name)) == to_dict(term)
+    rewards = to_dict(cfg.rewards)
+    for term in rewards.values():
+        if term is not None and term["params"].get("action_term_name") == "mpm_contact":
+            term["params"]["action_term_name"] = "sand_proxy"
+    assert rewards == to_dict(proxy.rewards)
+    assert cfg.rewards.sand_diagonal_steps is None and cfg.rewards.sand_step_completion is None
     for term in vars(cfg.rewards).values():
-        if term is not None and hasattr(term, "params"):
+        if term is not None:
             sensor = term.params.get("sensor_cfg")
             assert sensor is None or sensor.name != "contact_forces"
 
@@ -122,7 +126,7 @@ def _env():
 
 
 def _reward(env, name):
-    cfg = getattr(env.cfg.rewards, name)
+    cfg = getattr(DeeproboticsM20WalkOnSandRewardsCfg(), name)
     cfg.params["asset_cfg"].body_ids = [0, 1, 2, 3]
     return cfg.func(cfg, env), cfg.params
 
@@ -169,10 +173,12 @@ def test_completed_strokes_scale_commands_and_clear_pending_credit_on_partial_re
 def test_play_preserves_walk_observation_interface_and_coupled_physics():
     cfg = DeeproboticsM20WalkOnSandEnvCfg()
     walk = DeeproboticsM20WalkEnvCfg()
+    proxy = DeeproboticsM20WalkOnSandProxyEnvCfg()
     physics = to_dict(cfg.sim.physics)
     cfg.play_mode()
     walk.play_mode()
+    proxy.play_mode()
     assert to_dict(cfg.observations) == to_dict(walk.observations)
-    assert to_dict(cfg.commands) == to_dict(walk.commands)
+    assert to_dict(cfg.commands) == to_dict(proxy.commands)
     assert to_dict(cfg.sim.physics) == physics
     assert cfg.scene.contact_forces is None

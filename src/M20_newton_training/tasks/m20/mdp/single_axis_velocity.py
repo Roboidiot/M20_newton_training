@@ -1,4 +1,4 @@
-"""Sample exactly one translation/turn axis without near-zero commands."""
+"""Sample one enabled translation/turn axis without near-zero movement commands."""
 
 from __future__ import annotations
 
@@ -13,7 +13,11 @@ from .commands import UniformThresholdVelocityCommand, UniformThresholdVelocityC
 
 
 class SingleAxisVelocityCommand(UniformThresholdVelocityCommand):
-    """Keep the existing command observations/metrics, choosing each axis with probability 1/3."""
+    """Choose uniformly among enabled axes; (0, 0) disables an axis.
+
+    All-zero ranges produce stationary commands. Enabled axes retain the common
+    minimum magnitude and the existing command observations/metrics.
+    """
 
     cfg: SingleAxisVelocityCommandCfg
 
@@ -28,6 +32,9 @@ class SingleAxisVelocityCommand(UniformThresholdVelocityCommand):
             lo, hi = bounds
             if not all(math.isfinite(v) for v in bounds) or lo > hi:
                 raise ValueError(f"Invalid velocity range: {bounds}")
+            if lo == hi == 0.0:
+                self._axis_intervals.append([])
+                continue
             intervals = []
             if lo <= -cfg.min_abs_command:
                 intervals.append((lo, min(hi, -cfg.min_abs_command)))
@@ -36,6 +43,11 @@ class SingleAxisVelocityCommand(UniformThresholdVelocityCommand):
             if not intervals:
                 raise ValueError(f"Range {bounds} contains no command with magnitude >= {cfg.min_abs_command}")
             self._axis_intervals.append(intervals)
+        self._enabled_axes = torch.tensor(
+            [axis for axis, intervals in enumerate(self._axis_intervals) if intervals],
+            dtype=torch.long,
+            device=self.device,
+        )
 
     def _sample_values(self, axis, count):
         intervals = self._axis_intervals[axis]
@@ -57,10 +69,14 @@ class SingleAxisVelocityCommand(UniformThresholdVelocityCommand):
             env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
         # Do not run the parent's mixed sampling or its <=0.2 m/s zeroing rule.
         self.vel_command_b[env_ids] = 0.0
-        self.is_standing_env[env_ids] = False
+        self.is_standing_env[env_ids] = self._enabled_axes.numel() == 0
         self.is_heading_env[env_ids] = False
-        axes = torch.randint(3, (len(env_ids),), device=self.device)
+        if self._enabled_axes.numel() == 0:
+            return
+        axes = self._enabled_axes[torch.randint(self._enabled_axes.numel(), (len(env_ids),), device=self.device)]
         for axis in range(3):
+            if not self._axis_intervals[axis]:
+                continue
             selected = env_ids[axes == axis]
             self.vel_command_b[selected, axis] = self._sample_values(axis, len(selected))
 

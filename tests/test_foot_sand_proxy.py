@@ -18,10 +18,13 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     rotate_xyzw,
 )
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
-    ProxyRotationGaitStatus,
-    ProxyRotationGaitSymmetry,
+    ProxyCrawlGaitStatus,
+    ProxyCrawlGaitSymmetry,
+    ProxyFootClearanceReward,
+    ProxyFootForwardStepReward,
     proxy_feet_air_time_command_scaled,
     proxy_hipx_symmetry_l2,
+    sand_base_height_l2,
 )
 
 
@@ -108,30 +111,41 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
         "sand_step_completion",
         "undesired_contacts",
         "feet_lift_consistency",
+        "joint_acc_l2",
+        "joint_torques_l2",
     ):
         assert getattr(cfg.rewards, name) is None
     for name, func, weight in (
-        ("feet_air_time", proxy_feet_air_time_command_scaled, 2.0),
-        ("rotation_gait_status", ProxyRotationGaitStatus, 20.0),
-        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry, 1.0),
+        ("feet_air_time", proxy_feet_air_time_command_scaled, 5.0),
+        ("rotation_gait_status", ProxyCrawlGaitStatus, 200.0),
+        ("feet_sand_clearance", ProxyFootClearanceReward, 20.0),
+        ("feet_forward_step", ProxyFootForwardStepReward, 5.0),
+        ("rotation_gait_symmetry", ProxyCrawlGaitSymmetry, 2.5),
     ):
         term = getattr(cfg.rewards, name)
         assert term.func is func and term.weight == weight
         assert term.params["action_term_name"] == "sand_proxy"
         assert "sensor_cfg" not in term.params
         assert term.params["min_command_norm"] == 0.1
-    assert cfg.rewards.hipx_joint_pos_penalty.weight == -1.5
+    assert cfg.rewards.hipx_joint_pos_penalty.weight == -0.25
     assert cfg.rewards.hipx_symmetry.func is proxy_hipx_symmetry_l2
     assert cfg.rewards.hipx_symmetry.weight == -0.5
     assert cfg.rewards.hipx_symmetry.params["asset_cfg"].preserve_order
+    assert cfg.rewards.base_height_l2.func is sand_base_height_l2
+    assert cfg.rewards.base_height_l2.weight == -10.0
+    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.30
+    assert cfg.rewards.base_height_l2.params["target_height"] > 0  # User-tunable posture target.
     assert cfg.rewards.rotation_gait_status.params["target_height"] == 0.30
+    assert cfg.rewards.rotation_gait_symmetry.params["window_s"] == 2.0
+    assert cfg.rewards.flat_orientation_l2.weight == -20.0
+    assert cfg.rewards.action_rate_l2.weight == -0.01
+    assert cfg.rewards.joint_vel_wheel_l2.weight == -10.0
     assert cfg.rewards.track_lin_vel_xy_exp.weight == 5.0
     assert cfg.rewards.track_ang_vel_z_exp.weight == 2.0
     assert not hasattr(cfg.rewards, "command_progress")
-    assert not hasattr(cfg.rewards, "forward_foot_placement")
-    for term in vars(cfg.rewards).values():
-        if term is not None:
-            assert not {"clearance_threshold", "target_clearance", "min_movement_scale"} & term.params.keys()
+    assert cfg.commands.base_velocity.ranges.lin_vel_x == (0.15, 0.25)
+    assert cfg.commands.base_velocity.ranges.lin_vel_y == (0.0, 0.0)
+    assert cfg.commands.base_velocity.ranges.ang_vel_z == (0.0, 0.0)
     assert cfg.actions.sand_proxy.contact_force_threshold == 5.0
     for term in vars(cfg.rewards).values():
         if term is not None:

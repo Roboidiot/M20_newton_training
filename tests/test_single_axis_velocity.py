@@ -1,4 +1,4 @@
-"""Exclusive direction commands, nonzero bounds, resampling and inherited reset metrics."""
+"""Exclusive direction commands, disabled axes, resampling and inherited reset metrics."""
 
 from types import SimpleNamespace
 
@@ -10,7 +10,12 @@ from M20_newton_training.tasks.m20.mdp.single_axis_velocity import SingleAxisVel
 
 
 def _command(n=1024, cfg=None):
-    cfg = cfg or DeeproboticsM20WalkOnSandProxyEnvCfg().commands.base_velocity
+    if cfg is None:
+        cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().commands.base_velocity
+        cfg.min_abs_command = 0.16
+        cfg.ranges.lin_vel_x = (-0.4, 0.4)
+        cfg.ranges.lin_vel_y = (-0.3, 0.3)
+        cfg.ranges.ang_vel_z = (-0.4, 0.4)
     cfg.debug_vis = False
 
     def wrap(value):
@@ -85,8 +90,47 @@ def test_reset_preserves_inherited_episode_metrics_and_resamples_nonzero_command
 
 def test_sampler_rejects_ranges_without_allowed_nonzero_values():
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().commands.base_velocity
+    cfg.min_abs_command = 0.16
     cfg.ranges.lin_vel_y = (-0.15, 0.15)
     with pytest.raises(ValueError, match="contains no command"):
         _command(cfg=cfg)
+
+
+@pytest.mark.parametrize("enabled", [(0,), (1,), (2,), (0, 1), (0, 2), (1, 2), ()])
+def test_zero_ranges_disable_axes_and_all_zero_ranges_allow_standing(enabled):
+    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().commands.base_velocity
+    cfg.min_abs_command = 0.25
+    for axis, name in enumerate(("lin_vel_x", "lin_vel_y", "ang_vel_z")):
+        setattr(cfg.ranges, name, (-0.5, 0.5) if axis in enabled else (0.0, 0.0))
+    command = _command(cfg=cfg)
+    for _ in range(3):
+        command._resample_command(slice(None))
+        command._update_command()
+        values = command.command
+        assert (command.is_standing_env == (not enabled)).all()
+        assert not command.is_heading_env.any()
+        assert (torch.count_nonzero(values, dim=1) == bool(enabled)).all()
+        for axis in range(3):
+            if axis not in enabled:
+                assert not values[:, axis].any()
+            else:
+                active = values[:, axis][values[:, axis] != 0]
+                assert (active.abs() >= 0.25).all() and (active.abs() <= 0.5).all()
+                assert (active > 0).any() and (active < 0).any()
+                assert abs(len(active) / command.num_envs - 1 / len(enabled)) < 0.08
+
+
+def test_forward_only_accepts_exact_minimum_and_zeroes_other_components():
+    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().commands.base_velocity
+    cfg.min_abs_command = 0.25
+    cfg.ranges.lin_vel_x = (0.25, 0.25)
+    cfg.ranges.lin_vel_y = (0.0, 0.0)
+    cfg.ranges.ang_vel_z = (0.0, 0.0)
+    command = _command(8, cfg=cfg)
+    command.vel_command_b[:] = 0.5
+    command._resample_command([1, 3])
+    command._update_command()
+    torch.testing.assert_close(command.command[[1, 3]], torch.tensor([[0.25, 0.0, 0.0]]).repeat(2, 1))
+    torch.testing.assert_close(command.command[[0, 2, 4, 5, 6, 7]], torch.full((6, 3), 0.5))
 
 

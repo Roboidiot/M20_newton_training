@@ -7,7 +7,23 @@ import math
 import torch
 
 from isaaclab.managers import ManagerTermBase
-from isaaclab.utils.math import quat_apply_inverse
+from isaaclab.utils.math import quat_apply, quat_apply_inverse, yaw_quat
+
+HIPX_BODY_NAMES = ("fl_hipx", "fr_hipx", "hl_hipx", "hr_hipx")
+
+
+def _ordered_hipx_body_ids(env):
+    """Resolve HipX joint origins in the same FL/FR/HL/HR order as the foot providers.
+
+    The deployed M20 USD has localPos1=(0,0,0) for each HipX joint, so the child
+    link origin is exactly the joint pivot. Use body_link_pos_w, never link CoM.
+    Reference-axis conventions remain world Z / chassis-yaw-aligned XY; these
+    are position references, not frames rotating with the HipX motor angle.
+    """
+    ids, names = env.scene["robot"].find_bodies(list(HIPX_BODY_NAMES), preserve_order=True)
+    if list(names) != list(HIPX_BODY_NAMES) or len(ids) != 4 or len(set(ids)) != 4:
+        raise ValueError(f"Expected four ordered HipX bodies {HIPX_BODY_NAMES}; got {names} / {ids}")
+    return ids
 
 
 class ProxyFootContactState:
@@ -68,6 +84,362 @@ class ProxyFootContactState:
 def _gait_command_gate(env, command_name, min_command_norm):
     """Use the full [vx, vy, wz] command so pure yaw can still activate stepping."""
     return env.command_manager.get_command(command_name).norm(dim=1) >= min_command_norm
+
+
+def sand_base_height_l2(env, target_height, surface_height=0.30):
+    """Squared root height error relative to the nominal sand surface, in meters.
+
+    Environment origin Z is removed explicitly. Ray casters see the rigid floor
+    rather than the analytic/MPM sand surface and must not supply this reference.
+    """
+    height = env.scene["robot"].data.root_pos_w.torch[:, 2] - env.scene.env_origins[:, 2] - surface_height
+    return (height - target_height).square()
+
+
+def forward_pitch_orientation_l2(env, command_name, forward_pitch_deg=-5.0, forward_threshold=0.1):
+    """Keep zero roll and a small nose-up pitch while commanded forward.
+
+    M20 moves forward along body +X with +Z up. Negative right-handed pitch
+    about +Y raises its nose. For pitch theta, projected gravity in the body is
+    [sin(theta), 0, -cos(theta)]. Retain the original XY gravity-error penalty,
+    shifting its X target only for vx commands above forward_threshold.
+    Other commands retain the level-body target; yaw does not affect the error.
+    """
+    gravity = env.scene["robot"].data.projected_gravity_b.torch
+    forward = env.command_manager.get_command(command_name)[:, 0] > forward_threshold
+    target_x = torch.where(forward, math.sin(math.radians(forward_pitch_deg)), 0.0)
+    return (gravity[:, 0] - target_x).square() + gravity[:, 1].square()
+
+
+def no_turn_ang_vel_z_l2(env, command_name, zero_command_threshold=1e-6):
+    """Penalize body yaw speed squared only when no yaw motion is commanded."""
+    command = env.command_manager.get_command(command_name)[:, 2]
+    yaw_speed = env.scene["robot"].data.root_ang_vel_b.torch[:, 2]
+    return yaw_speed.square() * (command.abs() <= zero_command_threshold)
+
+
+def com_forward_support_l2(
+    env,
+    command_name="base_velocity",
+    action_term_name="sand_proxy",
+    allowed_forward_offset=0.03,
+    distance_scale=0.10,
+    min_command_norm=0.1,
+    min_support_feet=2,
+):
+    """Penalize whole-robot CoM bias toward the planar command, relative to supporting feet.
+
+    The reference is the unweighted mean XY position of feet with upward support
+    (the provider's existing vertical_contact predicate), not a force-weighted
+    center of pressure. Swing feet are excluded. Current per-link masses and CoM
+    positions include mass/CoM randomization; the root link is not the robot CoM.
+    Both the reference and the robot move freely in world space. Only their
+    relative displacement projected onto the yaw-aligned command is penalized.
+
+    Returns a nonnegative, normalized squared excess; bind a negative weight.
+    Idle/pure-yaw commands and fewer than min_support_feet supports return zero.
+    This is a directional posture cost, not a support-polygon/ZMP stability test.
+    """
+    if not math.isfinite(allowed_forward_offset) or allowed_forward_offset < 0:
+        raise ValueError("allowed_forward_offset must be finite and nonnegative")
+    if not math.isfinite(distance_scale) or distance_scale <= 0:
+        raise ValueError("distance_scale must be finite and positive")
+    if not math.isfinite(min_command_norm) or min_command_norm <= 0:
+        raise ValueError("min_command_norm must be finite and positive")
+    if type(min_support_feet) is not int or not 1 <= min_support_feet <= 4:
+        raise ValueError("min_support_feet must be an integer in [1, 4]")
+
+    command = env.command_manager.get_command(command_name)[:, :2]
+    norm = command.norm(dim=1)
+    direction_b = torch.cat((command / norm.clamp_min(1e-8)[:, None], torch.zeros_like(norm[:, None])), dim=1)
+    data = env.scene["robot"].data
+    direction_w = quat_apply(yaw_quat(data.root_link_quat_w.torch), direction_b)[:, :2]
+
+    term = env.action_manager.get_term(action_term_name)
+    contact = term.contact_state.vertical_contact  # Publishes the MPM window before reading foot positions.
+    count = contact.sum(dim=1)
+    support_center = (term.application_points_w[..., :2] * contact[..., None]).sum(dim=1)
+    support_center = support_center / count.clamp_min(1)[:, None]
+    mass = data.body_mass.torch
+    # Subtract the local support reference before summing to retain precision in
+    # environments far from the world origin. This equals CoM_world - support_center.
+    relative_com = (
+        (data.body_com_pos_w.torch[..., :2] - support_center[:, None, :]) * mass[..., None]
+    ).sum(dim=1) / mass.sum(dim=1).clamp_min(1e-8)[:, None]
+    offset = (relative_com * direction_w).sum(dim=1)
+    penalty = ((offset - allowed_forward_offset).clamp_min(0.0) / distance_scale).square()
+    return torch.where((norm >= min_command_norm) & (count >= min_support_feet), penalty, 0.0)
+
+
+def _foot_participation_scale(progress, repeat_decay, max_progress_lead=None):
+    """Discount a foot's lead over the least-participating foot, without fixing order."""
+    lead = (progress - progress.amin(dim=1, keepdim=True)).clamp_min(0.0)
+    if max_progress_lead is not None:
+        scale = (1.0 - lead / max_progress_lead).clamp(0.0, 1.0)
+        return torch.where(lead + 1e-6 >= max_progress_lead, 0.0, scale)
+    return 1.0 / (1.0 + repeat_decay * lead)
+
+
+def _advance_participation_balance(balance, increment, max_progress_lead):
+    """Cap the internal lead; unpaid repeats must not build an ever-growing catch-up debt."""
+    ceiling = balance.amin(dim=1, keepdim=True) + max_progress_lead
+    balance.copy_(torch.minimum(balance + increment, ceiling))
+
+
+def _log_foot_participation(env, name, counts, progress, env_ids):
+    """Log per-foot completion counts and full-step-equivalent progress at resets."""
+    extras = getattr(env, "extras", None)
+    if extras is None:
+        return
+    ids = slice(None) if env_ids is None else env_ids
+    selected = counts[ids]
+    if selected.shape[0] == 0:
+        return
+    log = extras.setdefault("log", {})
+    mean_counts, mean_progress = selected.float().mean(dim=0), progress[ids].mean(dim=0)
+    for i, foot in enumerate(("fl", "fr", "hl", "hr")):
+        log[f"Metrics/{name}/{foot}_count"] = mean_counts[i]
+        log[f"Metrics/{name}/{foot}_progress"] = mean_progress[i]
+
+
+class _SandFootSwingReward(ManagerTermBase):
+    """Track independent, supported swings at the reward/control rate.
+
+    A swing must start from observed support, retain at least two other supports,
+    and keep the chassis upright and above its minimum sand-relative height.
+    Initial drops, flights, long swings and reversed commands cannot earn credit.
+    """
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        for name, default in (
+            ("target_clearance", 0.04), ("target_stride", 0.08), ("min_stride", 0.03),
+            ("min_air_time", 0.1), ("max_swing_time", 1.0),
+            ("min_base_height", 0.35), ("max_tilt", 0.5), ("min_command_norm", 0.1),
+        ):
+            value = cfg.params.get(name, default)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+        if cfg.params.get("min_stride", 0.03) > cfg.params.get("target_stride", 0.08):
+            raise ValueError("min_stride must not exceed target_stride")
+        if cfg.params.get("min_air_time", 0.1) > cfg.params.get("max_swing_time", 1.0):
+            raise ValueError("min_air_time must not exceed max_swing_time")
+        if cfg.params.get("max_tilt", 0.5) >= math.pi / 2:
+            raise ValueError("max_tilt must be less than pi/2")
+        shape = (env.num_envs, 4)
+        self.previous_contact = torch.zeros(shape, dtype=torch.bool, device=env.device)
+        self.swing_active = torch.zeros_like(self.previous_contact)
+        self.swing_valid = torch.zeros_like(self.previous_contact)
+        self.cleared = torch.zeros_like(self.previous_contact)
+        self.swing_steps = torch.zeros(shape, dtype=torch.long, device=env.device)
+        self.peak_clearance = torch.zeros(shape, device=env.device)
+        self.peak_forward = torch.zeros_like(self.peak_clearance)
+        self.forward_origin_w = torch.zeros((*shape, 3), device=env.device)
+        self.forward_origin_b = torch.zeros_like(self.forward_origin_w)
+        self.direction_b = torch.zeros((*shape, 2), device=env.device)
+        self.direction_w = torch.zeros_like(self.direction_b)
+        self.previous_direction = torch.zeros((env.num_envs, 2), device=env.device)
+
+    def reset(self, env_ids=None):
+        ids = slice(None) if env_ids is None else env_ids
+        for name in (
+            "previous_contact", "swing_active", "swing_valid", "cleared", "swing_steps",
+            "peak_clearance", "peak_forward", "forward_origin_w", "forward_origin_b",
+            "direction_b", "direction_w", "previous_direction",
+        ):
+            getattr(self, name)[ids] = 0
+
+    def __call__(
+        self, env, target_clearance=0.04, target_stride=0.08, min_stride=0.03,
+        min_air_time=0.1, max_swing_time=1.0, surface_height=0.30,
+        min_base_height=0.35, max_tilt=0.5, action_term_name="sand_proxy",
+        command_name="base_velocity", min_command_norm=0.1,
+    ):
+        command = env.command_manager.get_command(command_name)[:, :2]
+        norm = command.norm(dim=1)
+        direction = command / norm.clamp_min(1e-6)[:, None]
+        gate = norm >= min_command_norm
+        changed = (direction * self.previous_direction).sum(dim=1) < 0.95
+        self.reset(~gate | changed)
+        self.previous_direction.copy_(direction)
+
+        term = env.action_manager.get_term(action_term_name)
+        contact = term.contact_state.vertical_contact  # publishes the MPM window once if needed
+        point = term.application_points_w
+        data = env.scene["robot"].data
+        root = data.root_pos_w.torch
+        surface = env.scene.env_origins[:, 2] + surface_height
+        upright = -data.projected_gravity_b.torch[:, 2] >= math.cos(max_tilt)
+        posture = upright & (root[:, 2] - surface >= min_base_height)
+        supported = contact.sum(dim=1) >= 2
+        valid_env = gate & posture & supported
+        rotation = yaw_quat(data.root_quat_w.torch)
+        relative = quat_apply_inverse(rotation[:, None, :].expand(-1, 4, -1), point - root[:, None, :])
+
+        start = self.previous_contact & ~contact & valid_env[:, None]
+        for buffer in (self.swing_steps, self.peak_clearance, self.peak_forward, self.cleared):
+            buffer.masked_fill_(start, 0)
+        self.swing_active |= start
+        self.swing_valid |= start
+        self.direction_b.copy_(torch.where(start[..., None], direction[:, None, :], self.direction_b))
+        direction3 = torch.cat((direction, torch.zeros_like(norm[:, None])), dim=1)
+        world_direction = quat_apply(rotation, direction3)[:, :2]
+        self.direction_w.copy_(torch.where(start[..., None], world_direction[:, None, :], self.direction_w))
+        self.swing_steps.add_(self.swing_active)
+        minimum_steps = max(1, math.ceil(min_air_time / env.step_dt - 1e-6))
+        maximum_steps = max(1, math.floor(max_swing_time / env.step_dt + 1e-6))
+        self.swing_valid &= valid_env[:, None] & (self.swing_steps <= maximum_steps)
+        eligible = self.swing_active & self.swing_valid & ~contact
+        clearance = point[..., 2] - surface[:, None]
+        first_clear = eligible & ~self.cleared & (clearance >= target_clearance)
+        # Measure the forward stroke from extraction, not from buried liftoff.
+        self.forward_origin_w.copy_(torch.where(first_clear[..., None], point, self.forward_origin_w))
+        self.forward_origin_b.copy_(torch.where(first_clear[..., None], relative, self.forward_origin_b))
+        self.cleared |= first_clear
+        advance_b = ((relative - self.forward_origin_b)[..., :2] * self.direction_b).sum(dim=-1)
+        advance_w = ((point - self.forward_origin_w)[..., :2] * self.direction_w).sum(dim=-1)
+        # Translation/rotation of a rigidly held leg and backward chassis drift
+        # alone must not masquerade as a forward foot stroke.
+        advance = torch.minimum(advance_b, advance_w).clamp_min(0.0)
+        forward = (advance / target_stride).clamp(max=1.0)
+        clear_forward = eligible & self.cleared & (clearance >= target_clearance)
+        self.peak_forward.copy_(
+            torch.where(clear_forward, torch.maximum(self.peak_forward, forward), self.peak_forward)
+        )
+        mature = self.swing_steps >= minimum_steps
+        completed = self.swing_active & self.swing_valid & contact & mature & self.cleared
+        score = self._score(
+            (clearance / target_clearance).clamp(0.0, 1.0),
+            forward, advance >= min_stride, eligible & mature, completed,
+        )
+        self.swing_active &= ~contact
+        self.swing_valid &= ~contact
+        self.previous_contact.copy_(contact & gate[:, None])
+        return score.sum(dim=1)
+
+
+class ProxyFootClearanceReward(_SandFootSwingReward):
+    """Credit new foot-bottom clearance above sand, capped at one unit per swing.
+
+    No diagonal pattern is required. Buried unloading, initial falls, hovering and
+    revisiting a previously credited clearance earn zero. Units are incremental;
+    RewardManager still applies weight * control dt, as for the legacy lift term.
+    """
+
+    def _score(self, clearance, forward, enough_stride, eligible, completed):
+        increment = (clearance - self.peak_clearance).clamp_min(0.0)
+        score = torch.where(eligible, increment, 0.0)
+        self.peak_clearance.copy_(
+            torch.where(eligible, torch.maximum(self.peak_clearance, clearance), self.peak_clearance)
+        )
+        return score
+
+
+class ProxyExtractedFootForwardStepReward(_SandFootSwingReward):
+    """Reward extracted forward strokes only upon a valid subsequent touchdown.
+
+    Forward distance must increase both in the chassis yaw frame and in the world
+    command direction. It starts at the first observed target clearance. The
+    touchdown keeps at most the advance attained above sand: lifting in place,
+    buried dragging, forward-then-retracted feet and holding in air earn zero.
+    One completed foot earns at most one unit, without a fixed gait phase.
+    """
+
+    def _score(self, clearance, forward, enough_stride, eligible, completed):
+        return torch.where(completed & enough_stride, torch.minimum(self.peak_forward, forward), 0.0)
+
+
+class ProxyFootForwardStepReward(ManagerTermBase):
+    """Score a foot's own-HipX-relative advance between successive sampled touchdowns.
+
+    At each touchdown, subtract this leg's HipX joint origin and express the foot
+    offset in that instant's yaw-aligned horizontal frame. Project the change of
+    this relative offset onto the current body-frame translation command.
+    Common chassis/foot translation or yaw rotation cannot produce stride credit.
+    Only positive progress earns credit, capped at one raw unit per foot at
+    target_stride. A touchdown only
+    scores after min_air_time of consecutive sampled unloading. No sand clearance,
+    additional minimum stride, posture or support-count gate is used.
+    The first support after reset establishes an anchor without earning credit.
+    Continuous support cannot earn repeated progress; commands changing direction
+    or becoming inactive discard anchors. All state updates run at control rate.
+    Optional repeat_decay discounts feet ahead of the least-participating foot.
+    Participation counts pre-discount progress: one full stride is one effective
+    step; tiny contact jitter contributes proportionally little to catching up.
+    """
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        for name, default in (("target_stride", 0.08), ("min_command_norm", 0.1)):
+            if not math.isfinite(cfg.params.get(name, default)) or cfg.params.get(name, default) <= 0:
+                raise ValueError(f"{name} must be finite and positive")
+        if not math.isfinite(cfg.params.get("repeat_decay", 0.0)) or cfg.params.get("repeat_decay", 0.0) < 0:
+            raise ValueError("repeat_decay must be finite and nonnegative")
+        if not math.isfinite(cfg.params.get("min_air_time", 0.1)) or cfg.params.get("min_air_time", 0.1) < 0:
+            raise ValueError("min_air_time must be finite and nonnegative")
+        self.hip_body_ids = _ordered_hipx_body_ids(env)
+        self.previous_touchdown_relative_b = torch.zeros((env.num_envs, 4, 3), device=env.device)
+        self.touchdown_seen = torch.zeros((env.num_envs, 4), dtype=torch.bool, device=env.device)
+        self.previous_direction = torch.zeros((env.num_envs, 2), device=env.device)
+        self.completed_steps = torch.zeros((env.num_envs, 4), dtype=torch.long, device=env.device)
+        self.participation_progress = torch.zeros((env.num_envs, 4), device=env.device)
+
+    def reset(self, env_ids=None):
+        _log_foot_participation(
+            self._env, "forward_steps", self.completed_steps, self.participation_progress, env_ids
+        )
+        self._reset_state(env_ids)
+
+    def _reset_state(self, env_ids=None):
+        ids = slice(None) if env_ids is None else env_ids
+        for buffer in (
+            self.previous_touchdown_relative_b, self.touchdown_seen, self.previous_direction,
+            self.completed_steps, self.participation_progress,
+        ):
+            buffer[ids] = 0
+
+    def __call__(
+        self, env, target_stride=0.08, action_term_name="sand_proxy",
+        command_name="base_velocity", min_command_norm=0.1, repeat_decay=0.0, min_air_time=0.1,
+    ):
+        command = env.command_manager.get_command(command_name)[:, :2]
+        norm = command.norm(dim=1)
+        direction = command / norm.clamp_min(1e-6)[:, None]
+        gate = norm >= min_command_norm
+        changed = (direction * self.previous_direction).sum(dim=1) < 0.95
+        self._reset_state(~gate | changed)
+        self.previous_direction.copy_(direction)
+        term = env.action_manager.get_term(action_term_name)
+        state = term.contact_state  # Also publishes the MPM control-window force.
+        contact = state.vertical_contact
+        landed = state.touchdown[:, 0] & contact
+        point = term.application_points_w
+        data = env.scene["robot"].data
+        rotation = yaw_quat(data.root_quat_w.torch)
+        relative = quat_apply_inverse(
+            rotation[:, None, :].expand(-1, point.shape[1], -1),
+            point - data.body_link_pos_w.torch[:, self.hip_body_ids],
+        )
+        displacement = relative[..., :2] - self.previous_touchdown_relative_b[..., :2]
+        advance = (displacement * direction[:, None, :]).sum(dim=-1)
+        score = (advance / target_stride).clamp(0.0, 1.0)
+        # The shared touchdown timer includes the landing interval for legacy
+        # feet_air_time credit. Exclude that interval here: 0.1 s requires five
+        # unloaded 50 Hz samples, not four unloaded samples plus one landing.
+        unloaded_time = (state.touchdown_air_time[:, 0] - env.step_dt).clamp_min(0.0)
+        long_enough = unloaded_time + 1e-6 >= min_air_time
+        score = torch.where(landed & self.touchdown_seen & gate[:, None] & long_enough, score, 0.0)
+        scaled = score * _foot_participation_scale(self.participation_progress, repeat_decay)
+        self.completed_steps.add_((score > 0).long())
+        self.participation_progress.add_(score)
+        # Save every landing, including backward/too-short ones, so rejected
+        # contact jitter cannot bank displacement toward a later valid stride.
+        update = contact & (~self.touchdown_seen | landed) & gate[:, None]
+        self.previous_touchdown_relative_b.copy_(
+            torch.where(update[..., None], relative, self.previous_touchdown_relative_b)
+        )
+        self.touchdown_seen |= update
+        return scaled.sum(dim=1)
 
 
 def proxy_feet_air_time_command_scaled(
@@ -355,10 +727,21 @@ def _single_swing_patterns(contact):
 class ProxyCrawlGaitStatus(ManagerTermBase):
     """Reward new single-foot lift progress while all three other feet support.
 
-    Heights are calibrated capsule bottoms relative to each foot's last support
-    height, including support below the sand surface. There is no surface-clearance
-    condition or phase clock. Each foot earns at most one unit per swing; support
+    Heights use the calibrated capsule bottom minus this leg's HipX-origin Z, both
+    measured along world vertical. Each foot's last supported value is the
+    reference: lift = (foot_z - hip_z) - (foot_z - hip_z)_last_support.
+    Common foot/hip vertical translation cancels; support may be below the sand surface.
+    There is no surface-clearance condition or phase clock. Each foot earns at
+    most one unit per swing; support
     resets its credited progress. Initial drops and low commands earn no credit.
+    min_air_time consecutive sampled unloading is required before credit starts;
+    earlier peaks are not banked. Short swings cannot add participation progress.
+    Optional repeat_decay uses each foot's completed, pre-discount lift progress
+    to reduce the gain from repeating the same foot. One full target lift equals
+    one effective step, independently of the forward-touchdown reward's counts.
+    max_progress_lead selects a finite lead limit instead of the legacy inverse
+    discount. Its internal balance ledger is capped so unpaid repeats do not
+    create an unbounded catch-up debt; diagnostic progress remains undiscounted.
     """
 
     def __init__(self, cfg, env):
@@ -366,13 +749,34 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
         target = cfg.params.get("target_height", 0.30)
         if not math.isfinite(target) or target <= 0:
             raise ValueError("target_height must be finite and positive")
+        if not math.isfinite(cfg.params.get("repeat_decay", 0.0)) or cfg.params.get("repeat_decay", 0.0) < 0:
+            raise ValueError("repeat_decay must be finite and nonnegative")
+        if not math.isfinite(cfg.params.get("min_air_time", 0.1)) or cfg.params.get("min_air_time", 0.1) < 0:
+            raise ValueError("min_air_time must be finite and nonnegative")
+        lead = cfg.params.get("max_progress_lead")
+        if lead is not None and (not math.isfinite(lead) or lead <= 0):
+            raise ValueError("max_progress_lead must be finite and positive")
+        self.hip_body_ids = _ordered_hipx_body_ids(env)
         self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
         self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
         self.peak_progress = torch.zeros_like(self.support_height)
+        self.completed_steps = torch.zeros_like(self.support_height, dtype=torch.long)
+        self.participation_progress = torch.zeros_like(self.support_height)
+        self.balance_progress = torch.zeros_like(self.support_height)
 
     def reset(self, env_ids=None):
+        _log_foot_participation(
+            self._env, "lift_steps", self.completed_steps, self.participation_progress, env_ids
+        )
+        self._reset_state(env_ids)
+
+    def _reset_state(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
-        for value in (self.support_height, self.support_seen, self.peak_progress):
+        for value in (
+            self.support_height, self.support_seen, self.peak_progress,
+            self.completed_steps, self.participation_progress,
+            self.balance_progress,
+        ):
             value[ids] = 0
 
     def __call__(
@@ -382,21 +786,37 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
         action_term_name="sand_proxy",
         command_name="base_velocity",
         min_command_norm=0.1,
+        repeat_decay=0.0,
+        min_air_time=0.1,
+        max_progress_lead=None,
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
-        self.reset(~gate)
+        self._reset_state(~gate)
         term = env.action_manager.get_term(action_term_name)
-        contact = term.contact_state.vertical_contact
-        height = term.application_points_w[..., 2]
+        state = term.contact_state
+        contact = state.vertical_contact
+        hip_z = env.scene["robot"].data.body_link_pos_w.torch[:, self.hip_body_ids, 2]
+        height = term.application_points_w[..., 2] - hip_z
         supported = contact & gate[:, None]
         self.support_height.copy_(torch.where(supported, height, self.support_height))
         self.support_seen |= supported
+        completed = contact & (self.peak_progress > 0)
+        self.completed_steps.add_(completed.long())
+        self.participation_progress.add_(torch.where(completed, self.peak_progress, 0.0))
+        if max_progress_lead is not None:
+            _advance_participation_balance(
+                self.balance_progress, torch.where(completed, self.peak_progress, 0.0), max_progress_lead
+            )
         self.peak_progress.masked_fill_(contact, 0.0)
-        valid = _single_swing_patterns(contact) & self.support_seen & gate[:, None]
+        long_enough = state.current_air_time + 1e-6 >= min_air_time
+        valid = _single_swing_patterns(contact) & self.support_seen & gate[:, None] & long_enough
         progress = ((height - self.support_height) / target_height).clamp(0.0, 1.0)
         increment = (progress - self.peak_progress).clamp_min(0.0)
         self.peak_progress.copy_(torch.where(valid, torch.maximum(self.peak_progress, progress), self.peak_progress))
-        return (increment * valid).sum(dim=1)
+        balance = self.participation_progress if max_progress_lead is None else self.balance_progress
+        scale = _foot_participation_scale(balance, repeat_decay, max_progress_lead)
+        rewarded = increment * valid * scale
+        return rewarded.sum(dim=1)
 
 
 class ProxyCrawlGaitSymmetry(ManagerTermBase):

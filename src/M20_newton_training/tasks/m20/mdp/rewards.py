@@ -87,6 +87,54 @@ def track_lin_vel_xy_exp(
     return reward
 
 
+def command_direction_lin_vel_xy(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg | None = None,
+    max_reward: float | None = None,
+) -> torch.Tensor:
+    """Average body-XY v/cmd over commanded axes: -(cmd-v)/cmd+1.
+
+    Each matching nonzero component scores one, opposite motion scores negative,
+    and zero command components are excluded to avoid division by zero. No sign
+    extraction or yaw projection is used. max_reward optionally sets the peak:
+    averaged ratios above that point decrease linearly at the same slope magnitude.
+    Negative values remain unbounded. With no commanded XY axis, return zero.
+    RewardManager supplies the weight and control-step dt.
+    """
+    asset: Articulation = env.scene["robot" if asset_cfg is None else asset_cfg.name]
+    command = env.command_manager.get_command(command_name)[:, :2]
+    velocity = asset.data.root_lin_vel_b.torch[:, :2]
+    active = command.abs() > 1e-6
+    denominator = torch.where(active, command, torch.ones_like(command))
+    ratios = torch.where(active, velocity / denominator, 0.0)
+    reward = ratios.sum(dim=1) / active.sum(dim=1).clamp_min(1)
+    if max_reward is None:
+        return reward
+    return torch.where(reward <= max_reward, reward, 2.0 * max_reward - reward)
+
+
+def command_direction_ang_vel_z(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg | None = None,
+    max_reward: float | None = None,
+) -> torch.Tensor:
+    """Body-Z angular v/cmd with the same optional peak shaping as body-XY.
+
+    Ratios above max_reward decrease linearly at the same slope magnitude.
+    Negative values remain unbounded; a zero turn command gives zero.
+    """
+    asset: Articulation = env.scene["robot" if asset_cfg is None else asset_cfg.name]
+    command = env.command_manager.get_command(command_name)[:, 2]
+    active = command.abs() > 1e-6
+    denominator = torch.where(active, command, torch.ones_like(command))
+    reward = torch.where(active, asset.data.root_ang_vel_b.torch[:, 2] / denominator, 0.0)
+    if max_reward is None:
+        return reward
+    return torch.where(reward <= max_reward, reward, 2.0 * max_reward - reward)
+
+
 def joint_torques_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     """Penalize joint torques (curriculum-scaled by gait_level)."""
     asset: Articulation = env.scene[asset_cfg.name]

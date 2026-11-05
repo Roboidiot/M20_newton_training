@@ -8,6 +8,7 @@ import torch
 from isaaclab.managers import RewardTermCfg
 from isaaclab.utils import to_dict
 
+from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import DeeproboticsM20WalkOnSandEnvCfg
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import (
     DeeproboticsM20WalkOnSandProxyEnvCfg,
     FootProxyRewardsCfg,
@@ -28,9 +29,31 @@ from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
 def _env():
     commands = torch.tensor([[0.2, 0, 0], [0, -0.15, 0], [0, 0, -0.3], [0, 0.15, 0.3], [-0.2, 0, 0]])
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
+    # These tests exercise the retained stateless air-time formula independently.
+    cfg.rewards.feet_air_time.params.pop("max_progress_lead", None)
+    cfg.rewards.feet_air_time.params.pop("participation_time", None)
     # Height consistency is disabled in the task; exercise its reusable implementation independently.
     cfg.rewards.feet_lift_consistency = FootProxyRewardsCfg().feet_lift_consistency
     cfg.rewards.feet_lift_consistency.params.update(command_name="base_velocity", min_command_norm=0.1)
+    # The task now uses crawl helpers; retain independent regression coverage of the diagonal helpers.
+    cfg.rewards.rotation_gait_status = RewardTermCfg(
+        func=ProxyRotationGaitStatus, weight=100.0,
+        params={
+            "command_name": "base_velocity", "min_command_norm": 0.1,
+            "action_term_name": "sand_proxy", "target_height": 0.30,
+            "group_a_body_names": ["fl_wheel", "hr_wheel"],
+            "group_b_body_names": ["fr_wheel", "hl_wheel"],
+        },
+    )
+    cfg.rewards.rotation_gait_symmetry = RewardTermCfg(
+        func=ProxyRotationGaitSymmetry, weight=0.5,
+        params={
+            "command_name": "base_velocity", "min_command_norm": 0.1,
+            "action_term_name": "sand_proxy", "window_s": 4.0,
+            "group_a_body_names": ["fl_wheel", "hr_wheel"],
+            "group_b_body_names": ["fr_wheel", "hl_wheel"],
+        },
+    )
     n = len(commands)
     state = ProxyFootContactState(n, "cpu")
     # Intentionally permute articulation body slots relative to ordered proxy feet.
@@ -50,6 +73,10 @@ def _env():
         body_lin_vel_w=wrap(torch.zeros((n, 4, 3))),
         root_lin_vel_w=wrap(torch.zeros((n, 3))),
         root_quat_w=wrap(torch.tensor([[0.0, 0.0, 0.0, 1.0]]).repeat(n, 1)),
+        root_link_pos_w=wrap(torch.tensor([[0.0, 0.0, 0.6]]).repeat(n, 1)),
+        body_link_pos_w=wrap(torch.tensor([
+            [-.3141, -.0685, .6], [.3141, .0685, .6], [-.3141, .0685, .6], [.3141, -.0685, .6],
+        ]).repeat(n, 1, 1)),
         joint_pos=wrap(torch.zeros((n, 16))),
     )
     return SimpleNamespace(
@@ -59,7 +86,12 @@ def _env():
         step_dt=0.02,
         action_manager=SimpleNamespace(get_term=lambda name: term),
         command_manager=SimpleNamespace(get_command=lambda name: commands),
-        scene={"robot": SimpleNamespace(data=data)},
+        scene={"robot": SimpleNamespace(
+            data=data,
+            find_bodies=lambda names, preserve_order: (
+                [("hr_hipx", "fl_hipx", "hl_hipx", "fr_hipx").index(name) for name in names], list(names),
+            ),
+        )},
         commands=commands,
         term=term,
     )
@@ -319,7 +351,7 @@ def test_symmetry_scores_real_opposing_diagonals_and_partial_reset():
     cfg = env.cfg.rewards.rotation_gait_symmetry
     reward = ProxyRotationGaitSymmetry(cfg, env)
     before = to_dict(env.cfg)
-    assert reward.buffer_size == 100  # 2 s at the 50 Hz reward rate
+    assert reward.buffer_size == round(cfg.params["window_s"] / env.step_dt)
     for i in range(reward.buffer_size):
         _support(env, [0, 3] if i % 2 == 0 else [1, 2])
         assert env.term.contact_state.contact.all()
@@ -623,6 +655,9 @@ def test_foot_lift_consistency_waits_for_all_feet_and_uses_latest_completed_samp
 
 
 def _crawl_reward(env, cls, **params):
+    # Keep geometric/discount regressions independent of the new task timing gate.
+    if cls is ProxyCrawlGaitStatus:
+        params.setdefault("min_air_time", 0.)
     cfg = RewardTermCfg(
         func=cls,
         weight=1.0,
@@ -753,3 +788,122 @@ def test_crawl_phase_window_occupancy_warmup_expiry_and_command_gate():
 def test_crawl_rewards_reject_invalid_scales(cls, params):
     with pytest.raises(ValueError):
         _crawl_reward(_env(), cls, **params)
+
+
+@pytest.mark.parametrize("cfg_cls, provider", [
+    (DeeproboticsM20WalkOnSandProxyEnvCfg, "sand_proxy"),
+    (DeeproboticsM20WalkOnSandEnvCfg, "mpm_contact"),
+])
+def test_active_sand_tasks_reward_crawl_height_and_phase_while_all_feet_stay_buried(cfg_cls, provider):
+    env = _env()
+    cfg = cfg_cls()
+    assert cfg.rewards.feet_sand_clearance.weight == 20.0
+    lift = cfg.rewards.rotation_gait_status
+    phase = cfg.rewards.rotation_gait_symmetry
+    assert lift.func is ProxyCrawlGaitStatus and lift.weight > 0.
+    assert phase.func is ProxyCrawlGaitSymmetry and phase.weight == 2.5
+    assert lift.params["repeat_decay"] == 1.0
+    assert "max_progress_lead" not in lift.params
+    assert cfg.rewards.feet_air_time.func is proxy_feet_air_time_command_scaled
+    assert "max_progress_lead" not in cfg.rewards.feet_air_time.params
+    assert "participation_time" not in cfg.rewards.feet_air_time.params
+    assert cfg.rewards.feet_forward_step.params["repeat_decay"] == 1.0
+    assert "max_progress_lead" not in cfg.rewards.feet_forward_step.params
+    assert lift.params["min_air_time"] == .1
+    assert lift.params["action_term_name"] == phase.params["action_term_name"] == provider
+    assert lift.params["target_height"] == 0.30
+    assert phase.params["window_s"] == 2.0
+    assert cfg.rewards.feet_forward_step.params["target_stride"] > 0.
+    assert cfg.rewards.feet_forward_step.params["min_air_time"] == .1
+    assert "target_clearance" not in cfg.rewards.feet_forward_step.params
+    assert cfg.rewards.feet_forward_step.weight > 0.
+    height = env.term.application_points_w[..., 2]
+    height[:] = -0.30
+    _support(env, [0, 1, 2, 3])
+    lift_reward = lift.func(lift, env)
+    phase_reward = phase.func(phase, env)
+    assert not lift_reward(env, **lift.params).any()
+    assert phase_reward.buffer_size == 100  # Two seconds at 50 Hz.
+    for foot in range(4):
+        height[:] = -0.30
+        _support(env, [0, 1, 2, 3])
+        lift_reward(env, **lift.params)
+        phase_reward(env, **phase.params)
+        height[:, foot] += .15
+        for sample in range(5):
+            _support(env, [other for other in range(4) if other != foot])
+            expected = .5 if sample == 4 else 0.
+            torch.testing.assert_close(lift_reward(env, **lift.params), torch.full((env.num_envs,), expected))
+            result = phase_reward(env, **phase.params)
+            assert (height < 0.30).all()  # No clearance of the nominal sand surface.
+        height[:, foot] = -.30
+        _support(env, [0, 1, 2, 3])
+        lift_reward(env, **lift.params)
+        result = phase_reward(env, **phase.params)
+    torch.testing.assert_close(result, torch.full((env.num_envs,), .2))
+
+
+def _crawl_cycle(env, reward, params, foot, lift=.30):
+    height = env.term.application_points_w[..., 2]
+    baseline = height[:, foot].clone()
+    _support(env, [i for i in range(4) if i != foot])
+    height[:, foot] += lift
+    result = reward(env, **params)
+    assert not reward(env, **params).any()  # Hovering must not add progress or completions.
+    height[:, foot] = baseline
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **params).any()
+    return result
+
+
+def test_crawl_same_foot_discount_and_other_feet_restoring_balance_below_sand():
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus, repeat_decay=1.)
+    env.term.application_points_w[..., 2] = -.6
+    _support(env, [0, 1, 2, 3])
+    reward(env, **params)
+    for expected in (1., .5, 1. / 3.):
+        torch.testing.assert_close(_crawl_cycle(env, reward, params, 3), torch.full((5,), expected))
+    for foot in (1, 0, 2):
+        # The last unused foot remains the least-participating foot while catching up.
+        expected_scores = (1., 1., 1.) if foot == 2 else (1., .5, 1. / 3.)
+        for expected in expected_scores:
+            torch.testing.assert_close(_crawl_cycle(env, reward, params, foot), torch.full((5,), expected))
+    torch.testing.assert_close(reward.participation_progress, torch.full((5, 4), 3.))
+    torch.testing.assert_close(_crawl_cycle(env, reward, params, 3), torch.ones(5))
+    assert (env.term.application_points_w[..., 2] < .30).all()
+
+
+def test_crawl_partial_lifts_use_undiscounted_progress_and_reset_diagnostics():
+    env = _env()
+    env.extras = {"log": {}}
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus, repeat_decay=1.)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **params)
+    torch.testing.assert_close(_crawl_cycle(env, reward, params, 0, .15), torch.full((5,), .5))
+    torch.testing.assert_close(_crawl_cycle(env, reward, params, 0, .15), torch.full((5,), 1. / 3.))
+    assert (reward.completed_steps[:, 0] == 2).all()
+    torch.testing.assert_close(reward.participation_progress[:, 0], torch.ones(5))
+    reward.reset([2])
+    assert env.extras["log"]["Metrics/lift_steps/fl_count"] == 2
+    assert env.extras["log"]["Metrics/lift_steps/fl_progress"] == 1
+    assert not reward.completed_steps[2].any() and not reward.participation_progress[2].any()
+    assert reward.completed_steps[1, 0] == 2
+    env.commands[0] = 0
+    reward(env, **params)
+    assert not reward.completed_steps[0].any() and not reward.participation_progress[0].any()
+
+
+def test_crawl_contact_jitter_without_lift_does_not_count_as_a_completed_step():
+    env = _env()
+    reward, params = _crawl_reward(env, ProxyCrawlGaitStatus, repeat_decay=1.)
+    _support(env, [0, 1, 2, 3])
+    reward(env, **params)
+    assert not _crawl_cycle(env, reward, params, 3, 0.).any()
+    assert not reward.completed_steps.any() and not reward.participation_progress.any()
+
+
+@pytest.mark.parametrize("value", [-1., float("nan"), float("inf")])
+def test_crawl_invalid_repeat_discount_is_rejected(value):
+    with pytest.raises(ValueError, match="repeat_decay"):
+        _crawl_reward(_env(), ProxyCrawlGaitStatus, repeat_decay=value)

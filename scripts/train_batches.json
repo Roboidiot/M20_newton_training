@@ -1,0 +1,72 @@
+{
+  "defaults": {
+    "task": "M20NewtonTraining-M20-M20-WalkOnSandProxy",
+    "physics": "newton_mjwarp",
+    "num_envs": 2048,
+    "max_iterations": 2000,
+    "seed": 42,
+    "logger": "tensorboard",
+    "viz": "none",
+    "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk/2026-10-21_19-37-26/model_9999.pt",
+    "resume_optimizer_state": false,
+    "reward_weights": {
+      "com_forward_l2": 0.0,
+      "bad_orientation_penalty": -400.0,
+      "feet_sand_clearance": 0.0,
+      "rotation_gait_symmetry": 5.0
+    },
+    "overrides": {}
+  },
+  "runs": [
+    {
+      "name": "group_01",
+      "reward_weights": {
+        "rotation_gait_status": 400.0,
+        "feet_forward_step": 75.0
+      }
+    },
+    {
+      "name": "group_02",
+      "reward_weights": {
+        "rotation_gait_status": 750.0,
+        "feet_forward_step": 150.0
+      }
+    },
+    {
+      "name": "group_03",
+      "reward_weights": {
+        "rotation_gait_status": 1000.0,
+        "feet_forward_step": 150.0
+      }
+    },
+    {
+      "name": "group_04",
+      "reward_weights": {
+        "rotation_gait_status": 750.0,
+        "feet_forward_step": 250.0
+      }
+    },
+    {
+      "name": "group_05",
+      "reward_weights": {
+        "rotation_gait_status": 1000.0,
+        "feet_forward_step": 250.0
+      }
+    },
+    {
+      "name": "group_06",
+      "reward_weights": {
+        "rotation_gait_status": 1500.0,
+        "feet_forward_step": 300.0
+      }
+    },
+    {
+      "name": "group_07",
+      "reward_weights": {
+        "rotation_gait_status": 1000.0,
+        "feet_forward_step": 250.0,
+        "com_forward_l2": -2.0
+      }
+    }
+  ]
+}
