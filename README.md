@@ -121,29 +121,28 @@ Air time itself does not check whether the foot has left the sand surface.
 
 `rotation_gait_status` now uses `ProxyCrawlGaitStatus`: exactly three feet must
 support and the remaining foot must unload for at least `min_air_time=0.1` s. Reward only new maximum progress of that foot,
-`clip(((z_foot-z_hipx)-(z_foot-z_hipx)_last_support)/0.30,0,1)`, up to one raw unit per swing.
-Each foot uses its own HipX joint origin: FL/FR/HL/HR map to `fl_hipx`/`fr_hipx`/`hl_hipx`/`hr_hipx`.
-These link origins coincide with the HipX joint pivots in the deployed M20 USD (joint child localPos1=0).
-The reward resolves ordered body IDs once and reads live `body_link_pos_w`, not link center-of-mass positions.
-Both Z values are world-vertical coordinates. Each foot's supported foot-minus-HipX Z is updated until
-unloading and then frozen as its reference; HipX motor rotation does not rotate the reference axes.
-The 30 cm target is a change in this relative height; a foot still below the sand surface can earn progress. Initial
+`clip((z_foot_world-z_foot_world_last_support)/0.30,0,1)`, up to one raw unit per swing.
+As of 2026-11-07, both lift and forward-step rewards use the calibrated foot-bottom application point
+in world coordinates; neither subtracts chassis nor HipX positions. Each foot's supported world Z is
+updated until unloading and then frozen as its reference. The 30 cm target is a change in world height;
+a foot still below the sand surface can earn progress. Initial
 unobserved support, hovering, and revisiting an already credited height earn zero.
-Equal HipX/foot vertical translation cancels. By this definition, HipX descent with a fixed foot also
-increases relative lift; the existing body-height and orientation objectives remain separate constraints.
+Chassis or HipX motion with a fixed world-space foot earns no lift. Upward whole-robot translation can
+contribute if the foot satisfies the three-support/one-unloaded gate.
 The four main crawl terms have been restored to the versions before the finite-lead rotation experiment:
 
 - `rotation_gait_status` uses `ProxyCrawlGaitStatus` with its original inverse repeat discount
-  (`repeat_decay=1`), not the finite `max_progress_lead` limit. The HipX-relative 30 cm lift target
+  (`repeat_decay=1`), not the finite `max_progress_lead` limit. The world-Z 30 cm lift target
   and 0.1 s continuous-unloading gate remain.
 - `feet_air_time` uses the stateless `proxy_feet_air_time_command_scaled`: on touchdown, score
   `min(T,1)-0.1`, retaining the short-air penalty and command multipliers, without foot balancing.
 - `rotation_gait_symmetry` uses `ProxyCrawlGaitSymmetry`: within a 2 s window, the occupancy of
   each three-support/one-swing contact state is p_i; raw score is `4*(prod(p_i))**0.25`.
   It no longer counts qualified completed swings or imposes the experimental 3 cm lift gate.
-- `feet_forward_step` uses `ProxyFootForwardStepReward`: compare the foot's HipX-relative positions
-  at consecutive touchdowns, project onto the planar command, and score
-  `clip(relative_advance/target_stride,0,1)`. The current target is 12 cm and unloading must last
+- `feet_forward_step` uses `ProxyFootForwardStepReward`: compare the foot's world-XY positions
+  at consecutive touchdowns, project onto the current planar command rotated to world XY using chassis yaw, and score
+  `clip(world_advance/target_stride,0,1)`. Foot motion carried by the chassis counts; chassis motion with
+  a fixed world-space foot does not. The current target is 12 cm and unloading must last
   0.1 s. The original `repeat_decay=1` remains; chassis-progress and world-placement caps are removed.
 
 The inverse discount is `1/(1+progress_i-min(progress))`; it decreases repeated-foot gain but never
@@ -158,6 +157,23 @@ remain documented in the implementation docstrings.
 `feet_sand_clearance` was outside this four-term rollback and retains its separately configured helper;
 it is currently disabled in the batch JSON. Per-foot lift and forward diagnostics retain only
 the original count/progress logs.
+
+Foot-force diagnostics log only `Metrics/foot_forces/{fl,fr,hl,hr}_fz_mean`, in newtons.
+They use the same 50 Hz world-Z force samples as contact timing: the last applied
+proxy force of each control interval, or MPM whole-window impulse / 0.02 s.
+Signed means include airborne zeros and negative pull-out forces. At reset, each scalar
+averages the resetting worlds' own episode time means. TensorBoard further aggregates
+these scalars per PPO iteration; this is not a raw single-environment 50 Hz force trace.
+These metrics do not affect rewards or observations.
+
+Both sand-walking tasks additionally terminate on `base_height_low` when the base-link
+origin's world Z minus environment-origin Z reaches 0.65 m, and on `front_wheels_low`
+when mean rear-wheel link-origin Z exceeds mean front-wheel Z by at least 0.10 m.
+These are failures, not timeouts; the wheel check includes swing feet and uses ordered
+FL/FR/HL/HR wheel centers. `base_height_reset_penalty` and `front_wheels_reset_penalty`
+each have weight -100 and read only their matching termination flag. At 50 Hz each
+trigger contributes -2 after RewardManager's dt scaling; simultaneous failures contribute
+-4 from these two terms. Existing reward/termination terms remain separate.
 
 Body stability, action rate (-0.01) and wheel-speed costs are enabled; leg torque/acceleration are disabled.
 `contact_forces`, HipY/Knee posture costs, wheel acceleration, second-order action smoothing,

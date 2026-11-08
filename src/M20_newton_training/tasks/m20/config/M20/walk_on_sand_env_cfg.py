@@ -16,6 +16,7 @@ from .walk_env_cfg import DeeproboticsM20WalkEnvCfg
 from .walk_sand_common_cfg import (
     DeeproboticsM20WalkOnSandRewardsCfg,  # noqa: F401 - preserve the old import path
     SandWalkRewardsCfg,
+    SandWalkTerminationsCfg,
     configure_sand_walk_task,
 )
 
@@ -34,6 +35,7 @@ class DeeproboticsM20WalkOnSandEnvCfg(DeeproboticsM20WalkEnvCfg):
     )
     actions: MPMFootContactActionsCfg = MPMFootContactActionsCfg()
     rewards: SandWalkRewardsCfg = SandWalkRewardsCfg()
+    terminations: SandWalkTerminationsCfg = SandWalkTerminationsCfg()
 
     def __post_init__(self):
         super().__post_init__()

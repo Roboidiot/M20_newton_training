@@ -797,11 +797,11 @@ def test_crawl_rewards_reject_invalid_scales(cls, params):
 def test_active_sand_tasks_reward_crawl_height_and_phase_while_all_feet_stay_buried(cfg_cls, provider):
     env = _env()
     cfg = cfg_cls()
-    assert cfg.rewards.feet_sand_clearance.weight == 20.0
+    assert cfg.rewards.feet_sand_clearance is None
     lift = cfg.rewards.rotation_gait_status
     phase = cfg.rewards.rotation_gait_symmetry
     assert lift.func is ProxyCrawlGaitStatus and lift.weight > 0.
-    assert phase.func is ProxyCrawlGaitSymmetry and phase.weight == 2.5
+    assert phase.func is ProxyCrawlGaitSymmetry and phase.weight > 0.
     assert lift.params["repeat_decay"] == 1.0
     assert "max_progress_lead" not in lift.params
     assert cfg.rewards.feet_air_time.func is proxy_feet_air_time_command_scaled

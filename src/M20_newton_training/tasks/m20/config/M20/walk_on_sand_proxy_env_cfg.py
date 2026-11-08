@@ -15,7 +15,11 @@ from M20_newton_training.tasks.m20.velocity_env_cfg import MySceneCfg
 
 from .rough_env_cfg import DeeproboticsM20ActionsCfg
 from .walk_env_cfg import DeeproboticsM20WalkEnvCfg
-from .walk_sand_common_cfg import SandWalkRewardsCfg, configure_sand_walk_task
+from .walk_sand_common_cfg import (
+    SandWalkRewardsCfg,
+    SandWalkTerminationsCfg,
+    configure_sand_walk_task,
+)
 
 
 @configclass
@@ -37,7 +41,7 @@ class FootProxySceneCfg(MySceneCfg):
             size=(2.4, 2.4, 0.003),
             collision_props=None,
             rigid_props=None,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.70, 0.53, 0.31), opacity=0.35),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.70, 0.53, 0.31), opacity=0.85),
         ),
     )
 
@@ -57,6 +61,7 @@ class DeeproboticsM20WalkOnSandProxyEnvCfg(DeeproboticsM20WalkEnvCfg):
     scene: FootProxySceneCfg = FootProxySceneCfg(num_envs=2048, env_spacing=3.5)
     actions: FootProxyActionsCfg = FootProxyActionsCfg()
     rewards: FootProxyRewardsCfg = FootProxyRewardsCfg()
+    terminations: SandWalkTerminationsCfg = SandWalkTerminationsCfg()
 
 
 

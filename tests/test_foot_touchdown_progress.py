@@ -1,4 +1,4 @@
-"""Retained legacy touchdown reward regressions; active crawl trajectories have separate coverage."""
+"""World-space touchdown progress, command projection and per-foot participation regressions."""
 
 import math
 from types import SimpleNamespace
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from isaaclab.utils.math import quat_apply, quat_apply_inverse
+from isaaclab.utils.math import quat_apply
 
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import DeeproboticsM20WalkOnSandEnvCfg
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import DeeproboticsM20WalkOnSandProxyEnvCfg
@@ -25,7 +25,7 @@ def _env(
 ):
     n = 3
     cfg = cfg_cls().rewards.feet_forward_step
-    # Explicit legacy coverage; new active helper is tested in test_balanced_crawl_rewards.py.
+    # Keep these active world-space cases independent of optional experimental helpers.
     cfg.func = ProxyFootForwardStepReward
     cfg.params.pop("max_progress_lead", None)
     cfg.params.setdefault("repeat_decay", 1.0)
@@ -54,7 +54,7 @@ def _env(
         term=term,
         params=cfg.params,
         action_manager=SimpleNamespace(get_term=lambda name: term),
-        # Body-relative progress needs the root position, but no gravity or height gate.
+        # Yaw maps body-frame commands to world XY; root/HipX positions are not references.
         scene={
             "robot": SimpleNamespace(
                 data=SimpleNamespace(
@@ -110,7 +110,7 @@ def _step(env, unloaded=()):
 
 @pytest.mark.parametrize("command", [(0.2, 0.0, 0.0), (-0.2, 0.0, 0.0), (0.0, -0.2, 0.0)])
 @pytest.mark.parametrize("yaw", [0.0, math.pi / 2])
-def test_buried_foot_progress_uses_chassis_relative_displacement_and_command_heading(command, yaw):
+def test_buried_foot_progress_uses_world_displacement_and_command_heading(command, yaw):
     env = _env(command, yaw)
     assert not _step(env).any()  # First support only establishes the landing position.
     assert not _step(env, (0,)).any()
@@ -199,7 +199,7 @@ def test_inactive_or_reversed_command_clears_pending_touchdown_progress(command)
 
 @pytest.mark.parametrize("command", [(0.2, 0.0, 0.0), (-0.2, 0.0, 0.0), (0.0, -0.2, 0.0)])
 @pytest.mark.parametrize("yaw", [0.0, math.pi / 2])
-def test_common_foot_and_chassis_translation_is_not_a_forward_step(command, yaw):
+def test_common_foot_and_chassis_translation_counts_world_foot_progress(command, yaw):
     env = _env(command, yaw, min_air_time=0.1)
     _step(env)
     for _ in range(5):
@@ -208,22 +208,22 @@ def test_common_foot_and_chassis_translation_is_not_a_forward_step(command, yaw)
     _shift(env, 0.08, (0, 1, 2, 3))
     delta = env.term.application_points_w[:, 0] - before
     env.scene["robot"].data.root_link_pos_w.torch.add_(delta)
-    assert not _step(env).any()
-    assert not env.reward.completed_steps.any()
-    assert not env.reward.participation_progress.any()
+    torch.testing.assert_close(_step(env), torch.ones(3), atol=1e-5, rtol=1e-5)
+    assert (env.reward.completed_steps[:, 0] == 1).all()
+    torch.testing.assert_close(env.reward.participation_progress[:, 0], torch.ones(3), atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize(
     "foot_advance,body_advance,expected",
     [
         (0.12, 0.04, 1.0),
-        (0.08, 0.04, 0.5),
-        (0.04, 0.08, 0.0),
-        (0.08, 0.08, 0.0),
-        (0.0, -0.08, 1.0),
+        (0.08, 0.04, 1.0),
+        (0.04, 0.08, 0.5),
+        (0.08, 0.08, 1.0),
+        (0.0, -0.08, 0.0),
     ],
 )
-def test_stride_uses_difference_of_foot_minus_chassis_at_the_two_touchdowns(foot_advance, body_advance, expected):
+def test_stride_uses_world_touchdown_positions_independently_of_chassis_motion(foot_advance, body_advance, expected):
     env = _env(min_air_time=0.1)
     _step(env)
     for _ in range(5):
@@ -233,43 +233,32 @@ def test_stride_uses_difference_of_foot_minus_chassis_at_the_two_touchdowns(foot
     torch.testing.assert_close(_step(env), torch.full((3,), expected), atol=1e-5, rtol=1e-5)
 
 
-def test_each_environment_subtracts_its_own_chassis_motion():
+def test_different_chassis_motion_does_not_change_equal_world_foot_progress():
     env = _env(min_air_time=0.1)
     _step(env)
     for _ in range(5):
         _step(env, (0,))
     _shift(env, 0.08)
     env.scene["robot"].data.root_link_pos_w.torch[:, 0] += torch.tensor([0.0, 0.04, 0.08])
-    torch.testing.assert_close(_step(env), torch.tensor([1.0, 0.5, 0.0]), atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(_step(env), torch.ones(3), atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize("yaw", [math.pi / 2, math.pi, -0.7])
-@pytest.mark.parametrize("relative_advance", [0.0, 0.08])
-def test_touchdown_offsets_use_each_instant_heading_so_rigid_turns_do_not_count_as_leg_swing(yaw, relative_advance):
+@pytest.mark.parametrize("world_advance", [0.0, 0.04, 0.08])
+def test_command_heading_changes_only_projection_and_never_repositions_world_anchor(yaw, world_advance):
     env = _env(min_air_time=0.1)
     data = env.scene["robot"].data
     env.term.application_points_w[..., :2] += torch.tensor([[0.4, 0.2], [0.4, -0.2], [-0.4, 0.2], [-0.4, -0.2]])
     _step(env)
     for _ in range(5):
         _step(env, (0,))
-    relative = quat_apply_inverse(
-        data.root_quat_w.torch[:, None].expand(-1, 4, -1),
-        env.term.application_points_w - data.root_link_pos_w.torch[:, None],
-    )
-    relative[:, 0, 0] += relative_advance
     data.root_quat_w.torch[:] = torch.tensor([0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2)])
     data.root_link_pos_w.torch[:, :2] += torch.tensor([0.3, -0.2])
-    env.term.application_points_w.copy_(
-        data.root_link_pos_w.torch[:, None]
-        + quat_apply(
-            data.root_quat_w.torch[:, None].expand(-1, 4, -1),
-            relative,
-        )
-    )
-    torch.testing.assert_close(_step(env), torch.full((3,), relative_advance / 0.08), atol=1e-5, rtol=1e-5)
+    _shift(env, world_advance)
+    torch.testing.assert_close(_step(env), torch.full((3,), world_advance / 0.08), atol=1e-5, rtol=1e-5)
 
 
-def test_chassis_relative_reference_remains_previous_touchdown_not_liftoff():
+def test_world_reference_remains_previous_touchdown_not_liftoff():
     env = _env(min_air_time=0.1)
     _step(env)
     env.scene["robot"].data.root_link_pos_w.torch[:, 0] += 0.04
@@ -278,8 +267,8 @@ def test_chassis_relative_reference_remains_previous_touchdown_not_liftoff():
         _step(env, (0,))
     env.scene["robot"].data.root_link_pos_w.torch[:, 0] += 0.04
     _shift(env, 0.12)
-    # .12 foot progress - .08 chassis progress = .04 relative progress since touchdown.
-    torch.testing.assert_close(_step(env), torch.full((3,), 0.5), atol=1e-5, rtol=1e-5)
+    # World foot advance is .12, irrespective of the chassis's .08 advance.
+    torch.testing.assert_close(_step(env), torch.ones(3), atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize(

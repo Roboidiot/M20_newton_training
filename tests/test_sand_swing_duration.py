@@ -21,7 +21,7 @@ HIP_STORAGE = ("hr_hipx", "fl_hipx", "hl_hipx", "fr_hipx")
 def _env(cfg_cls=DeeproboticsM20WalkOnSandProxyEnvCfg, min_air_time=0.1, dt=0.02):
     cfg = cfg_cls()
     terms = [cfg.rewards.rotation_gait_status, cfg.rewards.feet_forward_step]
-    # Preserve standalone legacy geometry/timer regressions; active replacements have trajectory tests.
+    # Test the active world-coordinate rewards with their continuous-unloading gates.
     terms[1].func = ProxyFootForwardStepReward
     for term_cfg in terms:
         term_cfg.params.pop("max_progress_lead", None)
@@ -107,9 +107,11 @@ def test_short_lift_and_forward_landings_cannot_score_or_increase_participation(
             assert not reward.peak_progress.any()
 
 
-@pytest.mark.parametrize("dt,minimum_samples", [(0.01, 10), (0.02, 5), (0.025, 4)])
-def test_exact_threshold_qualifies_at_control_rate_and_landing_does_not_complete_the_timer(dt, minimum_samples):
-    env = _env(dt=dt)
+@pytest.mark.parametrize("min_air_time", [0.1, 0.5])
+@pytest.mark.parametrize("dt", [0.01, 0.02, 0.025])
+def test_exact_threshold_qualifies_at_control_rate_and_landing_does_not_complete_the_timer(dt, min_air_time):
+    env = _env(dt=dt, min_air_time=min_air_time)
+    minimum_samples = round(min_air_time / dt)
     _sample(env)
     for _ in range(minimum_samples - 1):
         assert all(not score.any() for score in _sample(env, (0,), z=-0.05))
@@ -198,56 +200,57 @@ def test_partial_reward_reset_during_unloading_cannot_inherit_a_prior_swing():
 
 @pytest.mark.parametrize("cfg_cls", [DeeproboticsM20WalkOnSandProxyEnvCfg, DeeproboticsM20WalkOnSandEnvCfg])
 @pytest.mark.parametrize("translation", [-0.2, 0.2])
-def test_whole_robot_vertical_translation_is_not_lift(cfg_cls, translation):
+def test_whole_robot_upward_translation_counts_as_world_lift_for_the_unloaded_foot(cfg_cls, translation):
     env = _env(cfg_cls)
     _sample(env)
     env.scene["robot"].data.root_link_pos_w.torch[:, 2] += translation
-    # All four feet move with the chassis; foot-minus-body Z remains constant.
+    # Common chassis/foot motion still changes the unloaded foot's world height.
     env.term.application_points_w[..., 2] += translation
-    for _ in range(5):
-        assert all(not score.any() for score in _sample(env, (0,)))
+    expected = max(translation, 0.0) / 0.30
+    for sample in range(5):
+        lift, stride = _sample(env, (0,))
+        torch.testing.assert_close(lift, torch.full((3,), expected if sample == 4 else 0.0))
+        assert not stride.any()
     _sample(env)
-    assert not env.rewards[0].completed_steps.any()
-    assert not env.rewards[0].participation_progress.any()
+    assert (env.rewards[0].completed_steps[:, 0] == int(translation > 0)).all()
+    torch.testing.assert_close(env.rewards[0].participation_progress[:, 0], torch.full((3,), expected))
 
 
 @pytest.mark.parametrize(
     "foot_delta,body_delta,expected",
     [
         (0.15, 0.0, 0.5),
-        (0.15, 0.06, 0.3),
-        (0.06, -0.06, 0.4),
-        (0.0, -0.15, 0.5),
-        (0.15, 0.30, 0.0),
+        (0.15, 0.06, 0.5),
+        (0.06, -0.06, 0.2),
+        (0.0, -0.15, 0.0),
+        (0.15, 0.30, 0.5),
         (0.0, 0.15, 0.0),
     ],
 )
-def test_lift_is_change_in_world_z_foot_minus_body_difference(foot_delta, body_delta, expected):
+def test_lift_is_world_foot_z_change_independently_of_body_motion(foot_delta, body_delta, expected):
     env = _env()
     _sample(env)
     env.scene["robot"].data.root_link_pos_w.torch[:, 2] += body_delta
     for sample in range(5):
         lift, _ = _sample(env, (0,), z=-0.2 + foot_delta)
         torch.testing.assert_close(lift, torch.full((3,), expected if sample == 4 else 0.0), atol=1e-6, rtol=1e-6)
-    assert not _evaluate(env)[0].any()  # Holding the relative height adds no repeated credit.
+    assert not _evaluate(env)[0].any()  # Holding world height adds no repeated credit.
 
 
-def test_reference_tracks_body_and_foot_z_at_the_latest_support_sample():
+def test_reference_tracks_only_world_foot_z_at_the_latest_support_sample():
     env = _env()
     _sample(env)
     body = env.scene["robot"].data.root_link_pos_w.torch
     body[:, 2] = 0.7
     _sample(env, z=-0.18)
-    # Latest support difference is -.18 - .70 = -.88, independently per foot.
-    torch.testing.assert_close(env.rewards[0].support_height[:, 0], torch.full((3,), -0.88))
+    torch.testing.assert_close(env.rewards[0].support_height[:, 0], torch.full((3,), -0.18))
     body[:, 2] = 0.8
     for sample in range(5):
         lift, _ = _sample(env, (0,), z=-0.03)
-        # Current difference = -.83; relative lift = .05, not world-foot rise .15.
-        torch.testing.assert_close(lift, torch.full((3,), (1.0 / 6.0) if sample == 4 else 0.0), atol=1e-6, rtol=1e-6)
+        torch.testing.assert_close(lift, torch.full((3,), 0.5 if sample == 4 else 0.0), atol=1e-6, rtol=1e-6)
 
 
-def test_each_environment_uses_its_own_chassis_z_and_relative_reference():
+def test_world_lift_does_not_depend_on_each_environments_chassis_z():
     env = _env()
     body = env.scene["robot"].data.root_link_pos_w.torch
     body[:, 2] = torch.tensor([0.6, 1.6, -0.4])
@@ -256,38 +259,35 @@ def test_each_environment_uses_its_own_chassis_z_and_relative_reference():
     for sample in range(5):
         lift, _ = _sample(env, (0,), z=-0.05)
         torch.testing.assert_close(
-            lift, torch.tensor([0.5, 0.0, 1.0]) if sample == 4 else torch.zeros(3), atol=1e-6, rtol=1e-6
+            lift, torch.full((3,), 0.5) if sample == 4 else torch.zeros(3), atol=1e-6, rtol=1e-6
         )
 
 
 @pytest.mark.parametrize("cfg_cls", [DeeproboticsM20WalkOnSandProxyEnvCfg, DeeproboticsM20WalkOnSandEnvCfg])
 @pytest.mark.parametrize("foot", range(4))
-def test_each_foot_uses_its_own_hipx_origin_with_scrambled_articulation_storage(cfg_cls, foot):
+def test_each_foot_ignores_its_hipx_origin_motion(cfg_cls, foot):
     env = _env(cfg_cls)
     _sample(env)
     env.manual_hips = True
-    lift_reward, forward_reward = env.rewards
     expected_ids = [HIP_STORAGE.index(name) for name in ("fl_hipx", "fr_hipx", "hl_hipx", "hr_hipx")]
-    assert lift_reward.hip_body_ids == forward_reward.hip_body_ids == expected_ids
     hip = env.scene["robot"].data.body_link_pos_w.torch[:, expected_ids[foot]]
     hip[:, 2] -= 0.15
     hip[:, 0] -= env.cfgs[1].params["target_stride"]
-    for sample in range(5):
+    for _ in range(5):
         lift, stride = _sample(env, (foot,))  # Foot and root stay fixed; only this HipX origin moved.
-        torch.testing.assert_close(lift, torch.full((3,), 0.5 if sample == 4 else 0.0), atol=1e-6, rtol=1e-6)
+        assert not lift.any()
         assert not stride.any()
     _, stride = _sample(env)
-    torch.testing.assert_close(stride, torch.ones(3), atol=1e-6, rtol=1e-6)
+    assert not stride.any()
     for reward in env.rewards:
-        assert (reward.completed_steps[:, foot] == 1).all()
-        assert not reward.completed_steps[:, [i for i in range(4) if i != foot]].any()
+        assert not reward.completed_steps.any()
 
 
-def test_chassis_origin_translation_alone_does_not_replace_the_measured_hipx_reference():
+def test_chassis_origin_translation_alone_cannot_change_world_foot_progress():
     env = _env()
     _sample(env)
     env.manual_hips = True
-    # Hip poses are supplied independently, so neither reward may substitute root position.
+    # Neither reward may substitute root position for the measured world foot position.
     env.scene["robot"].data.root_link_pos_w.torch += torch.tensor([-0.2, 0.1, -0.2])
     for _ in range(5):
         assert all(not score.any() for score in _sample(env, (0,)))
@@ -305,18 +305,20 @@ def test_a_different_legs_hip_motion_cannot_create_this_legs_progress():
     assert all(not score.any() for score in _sample(env))
 
 
-def test_common_foot_and_own_hip_translation_cancels_with_a_fixed_chassis_origin():
+def test_common_foot_and_own_hip_translation_counts_world_foot_motion():
     env = _env()
     _sample(env)
     env.manual_hips = True
     hip_id = HIP_STORAGE.index("fl_hipx")
     env.scene["robot"].data.body_link_pos_w.torch[:, hip_id] += torch.tensor([0.1, 0.0, 0.15])
     for sample in range(5):
-        scores = _sample(env, (0,), z=-0.05, dx=0.1 if sample == 0 else 0.0)
-        for score in scores:
-            torch.testing.assert_close(score, torch.zeros(3), atol=1e-5, rtol=0.0)
-    for score in _sample(env, z=-0.05):
-        torch.testing.assert_close(score, torch.zeros(3), atol=1e-5, rtol=0.0)
+        lift, stride = _sample(env, (0,), z=-0.05, dx=0.1 if sample == 0 else 0.0)
+        torch.testing.assert_close(lift, torch.full((3,), 0.5 if sample == 4 else 0.0), atol=1e-5, rtol=0.0)
+        assert not stride.any()
+    lift, stride = _sample(env, z=-0.05)
+    assert not lift.any()
+    expected = min(0.1 / env.cfgs[1].params["target_stride"], 1.0)
+    torch.testing.assert_close(stride, torch.full((3,), expected), atol=1e-5, rtol=0.0)
 
 
 @pytest.mark.parametrize("cls", [ProxyCrawlGaitStatus, ProxyFootForwardStepReward])
@@ -328,12 +330,30 @@ def test_common_foot_and_own_hip_translation_cancels_with_a_fixed_chassis_origin
         ([0, 1, 2], ["fl_hipx", "fr_hipx", "hl_hipx"]),
     ],
 )
-def test_missing_or_misordered_hipx_mapping_fails_during_reward_construction(cls, ids, names):
+def test_rewards_do_not_resolve_or_require_hipx_body_mapping(cls, ids, names):
     env = _env()
     env.scene["robot"].find_bodies = lambda requested, preserve_order: (ids, names)
     cfg = env.cfgs[0 if cls is ProxyCrawlGaitStatus else 1]
-    with pytest.raises(ValueError, match="ordered HipX"):
-        cls(cfg, env)
+    assert isinstance(cls(cfg, env), cls)
+
+
+@pytest.mark.parametrize("cfg_cls", [DeeproboticsM20WalkOnSandProxyEnvCfg, DeeproboticsM20WalkOnSandEnvCfg])
+def test_world_rewards_run_without_any_chassis_or_hipx_position_data(cfg_cls):
+    env = _env(cfg_cls)
+    env.manual_hips = True
+    robot = env.scene["robot"]
+    del robot.find_bodies
+    del robot.data.root_link_pos_w
+    del robot.data.body_link_pos_w
+    # Reconstruct after removing these inputs, then establish actual world support.
+    env.rewards = [cfg.func(cfg, env) for cfg in env.cfgs]
+    _sample(env)
+    for sample in range(5):
+        lift, stride = _sample(env, (0,), z=-0.05)
+        torch.testing.assert_close(lift, torch.full((3,), 0.5 if sample == 4 else 0.0))
+        assert not stride.any()
+    _, stride = _sample(env, z=-0.2, dx=env.cfgs[1].params["target_stride"])
+    torch.testing.assert_close(stride, torch.ones(3), atol=1e-6, rtol=1e-6)
 
 
 def test_deployed_m20_usd_hipx_child_origins_are_the_joint_pivots():

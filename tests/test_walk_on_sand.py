@@ -43,7 +43,11 @@ def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_
     assert to_dict(cfg.actions.joint_vel) == to_dict(walk.actions.joint_vel)
     assert not hasattr(cfg.actions, "sand_proxy")
     assert to_dict(cfg.commands) == to_dict(proxy.commands)
-    assert to_dict(cfg.terminations) == to_dict(walk.terminations)
+    assert to_dict(cfg.terminations) == to_dict(proxy.terminations)
+    sand_terminations = to_dict(cfg.terminations)
+    assert sand_terminations.pop("base_height_low")["time_out"] is False
+    assert sand_terminations.pop("front_wheels_low")["time_out"] is False
+    assert sand_terminations == to_dict(walk.terminations)
     physics = to_dict(cfg.sim.physics)
     physics["newton_sand"]["use_cuda_graph"] = True
     physics["default"]["use_cuda_graph"] = True

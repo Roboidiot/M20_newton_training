@@ -206,6 +206,7 @@ class MPMFootContactAction(ActionTerm):
         return self._application_points_w
 
     def reset(self, env_ids=None):
+        self._contact_state.log_force_metrics(self._env, env_ids)
         ids = slice(None) if env_ids is None else env_ids
         for value in (self.impulse_w, self._force_w, self._force_history_w, self._application_points_w):
             value[ids] = 0

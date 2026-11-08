@@ -123,6 +123,7 @@ class FootSandProxyAction(ActionTerm):
         )
 
     def reset(self, env_ids=None):
+        self.contact_state.log_force_metrics(self._env, env_ids)
         self.model.reset(env_ids)
         ids = slice(None) if env_ids is None else env_ids
         self.force_w[ids] = 0

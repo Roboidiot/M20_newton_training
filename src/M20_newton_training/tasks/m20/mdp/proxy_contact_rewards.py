@@ -6,7 +6,7 @@ import math
 
 import torch
 
-from isaaclab.managers import ManagerTermBase
+from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_apply_inverse, yaw_quat
 
 HIPX_BODY_NAMES = ("fl_hipx", "fr_hipx", "hl_hipx", "hr_hipx")
@@ -46,6 +46,9 @@ class ProxyFootContactState:
         self.current_contact_time = torch.zeros_like(self.current_air_time)
         self.touchdown_air_time = torch.zeros((num_envs, 1, 4), device=device)
         self.touchdown = torch.zeros_like(self.touchdown_air_time, dtype=torch.bool)
+        # World-Z force diagnostics sampled with the contact state, once per control step.
+        self.fz_integral = torch.zeros(shape, device=device)
+        self.force_duration = torch.zeros(num_envs, device=device)
 
     def begin_step(self):
         self.touchdown.zero_()
@@ -53,6 +56,9 @@ class ProxyFootContactState:
 
     def update(self, force_w, dt, threshold):
         """Update once per control step with dt=env.step_dt (0.02 s in this task)."""
+        fz = force_w[..., 2]
+        self.fz_integral.add_(fz * dt)
+        self.force_duration.add_(dt)
         # Upward support establishes contact; horizontal drag and downward pull-out
         # forces must not prevent air-time credit after a foot has unloaded.
         vertical_contact = force_w[..., 2] > threshold
@@ -67,6 +73,29 @@ class ProxyFootContactState:
         self.vertical_contact.copy_(vertical_contact)
         self.contact.copy_(torch.linalg.vector_norm(force_w, dim=-1) > threshold)
 
+    def log_force_metrics(self, env, env_ids=None):
+        """Log signed episode mean Fz before clearing resetting worlds.
+
+        All samples count, including airborne zeros and negative pull-out forces.
+        Scalars average the resetting worlds' own episode statistics, rather than
+        summing parallel robots or taking the norm of the complete force vector.
+        """
+        extras = getattr(env, "extras", None)
+        if extras is None:
+            return
+        ids = slice(None) if env_ids is None else env_ids
+        duration = self.force_duration[ids]
+        if duration.numel() == 0:
+            return
+        valid = (duration > 0).to(self.fz_integral.dtype)
+        count = valid.sum().clamp_min(1.)
+        divisor = duration.clamp_min(1e-12)[:, None]
+        values = self.fz_integral[ids] / divisor
+        means = (values * valid[:, None]).sum(dim=0) / count
+        log = extras.setdefault("log", {})
+        for foot, value in zip(("fl", "fr", "hl", "hr"), means, strict=True):
+            log[f"Metrics/foot_forces/{foot}_fz_mean"] = value
+
     def reset(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
         for buffer in (
@@ -77,6 +106,8 @@ class ProxyFootContactState:
             self.current_contact_time,
             self.touchdown_air_time,
             self.touchdown,
+            self.fz_integral,
+            self.force_duration,
         ):
             buffer[ids] = 0
 
@@ -94,6 +125,23 @@ def sand_base_height_l2(env, target_height, surface_height=0.30):
     """
     height = env.scene["robot"].data.root_pos_w.torch[:, 2] - env.scene.env_origins[:, 2] - surface_height
     return (height - target_height).square()
+
+
+def front_wheels_height_reward(env, asset_cfg: SceneEntityCfg):
+    """Reward positive front-minus-rear mean wheel height in world Z, in meters.
+
+    asset_cfg must resolve wheel link origins in FL/FR/HL/HR order. Equal wheel
+    radii make their center-height difference equal to the bottom-height
+    difference. This is instantaneous geometry: no contact or command gate,
+    target-height normalization, or upper clamp is applied. Lowering the rear
+    wheels also increases this relative-height reward.
+    """
+    heights = env.scene[asset_cfg.name].data.body_link_pos_w.torch[:, asset_cfg.body_ids, 2]
+    if heights.shape[1] != 4:
+        raise ValueError("Expected four ordered FL/FR/HL/HR wheel bodies")
+    front_mean = heights[:, :2].mean(dim=1)
+    rear_mean = heights[:, 2:].mean(dim=1)
+    return (front_mean - rear_mean).clamp_min(0.0)
 
 
 def forward_pitch_orientation_l2(env, command_name, forward_pitch_deg=-5.0, forward_threshold=0.1):
@@ -350,12 +398,13 @@ class ProxyExtractedFootForwardStepReward(_SandFootSwingReward):
 
 
 class ProxyFootForwardStepReward(ManagerTermBase):
-    """Score a foot's own-HipX-relative advance between successive sampled touchdowns.
+    """Score a foot's world-XY advance between successive sampled touchdowns.
 
-    At each touchdown, subtract this leg's HipX joint origin and express the foot
-    offset in that instant's yaw-aligned horizontal frame. Project the change of
-    this relative offset onto the current body-frame translation command.
-    Common chassis/foot translation or yaw rotation cannot produce stride credit.
+    Store the calibrated foot-bottom application point in world coordinates.
+    Project its displacement onto the current planar command rotated into world
+    XY by the chassis yaw. No chassis or HipX position is subtracted. Chassis
+    motion alone with a fixed world-space foot earns nothing; a foot carried
+    forward with the chassis can earn credit after qualifying unloading.
     Only positive progress earns credit, capped at one raw unit per foot at
     target_stride. A touchdown only
     scores after min_air_time of consecutive sampled unloading. No sand clearance,
@@ -377,8 +426,7 @@ class ProxyFootForwardStepReward(ManagerTermBase):
             raise ValueError("repeat_decay must be finite and nonnegative")
         if not math.isfinite(cfg.params.get("min_air_time", 0.1)) or cfg.params.get("min_air_time", 0.1) < 0:
             raise ValueError("min_air_time must be finite and nonnegative")
-        self.hip_body_ids = _ordered_hipx_body_ids(env)
-        self.previous_touchdown_relative_b = torch.zeros((env.num_envs, 4, 3), device=env.device)
+        self.previous_touchdown_w = torch.zeros((env.num_envs, 4, 3), device=env.device)
         self.touchdown_seen = torch.zeros((env.num_envs, 4), dtype=torch.bool, device=env.device)
         self.previous_direction = torch.zeros((env.num_envs, 2), device=env.device)
         self.completed_steps = torch.zeros((env.num_envs, 4), dtype=torch.long, device=env.device)
@@ -393,7 +441,7 @@ class ProxyFootForwardStepReward(ManagerTermBase):
     def _reset_state(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
         for buffer in (
-            self.previous_touchdown_relative_b, self.touchdown_seen, self.previous_direction,
+            self.previous_touchdown_w, self.touchdown_seen, self.previous_direction,
             self.completed_steps, self.participation_progress,
         ):
             buffer[ids] = 0
@@ -414,14 +462,10 @@ class ProxyFootForwardStepReward(ManagerTermBase):
         contact = state.vertical_contact
         landed = state.touchdown[:, 0] & contact
         point = term.application_points_w
-        data = env.scene["robot"].data
-        rotation = yaw_quat(data.root_quat_w.torch)
-        relative = quat_apply_inverse(
-            rotation[:, None, :].expand(-1, point.shape[1], -1),
-            point - data.body_link_pos_w.torch[:, self.hip_body_ids],
-        )
-        displacement = relative[..., :2] - self.previous_touchdown_relative_b[..., :2]
-        advance = (displacement * direction[:, None, :]).sum(dim=-1)
+        rotation = yaw_quat(env.scene["robot"].data.root_quat_w.torch)
+        direction_w = quat_apply(rotation, torch.cat((direction, torch.zeros_like(direction[:, :1])), dim=1))[:, :2]
+        displacement = point[..., :2] - self.previous_touchdown_w[..., :2]
+        advance = (displacement * direction_w[:, None, :]).sum(dim=-1)
         score = (advance / target_stride).clamp(0.0, 1.0)
         # The shared touchdown timer includes the landing interval for legacy
         # feet_air_time credit. Exclude that interval here: 0.1 s requires five
@@ -435,8 +479,8 @@ class ProxyFootForwardStepReward(ManagerTermBase):
         # Save every landing, including backward/too-short ones, so rejected
         # contact jitter cannot bank displacement toward a later valid stride.
         update = contact & (~self.touchdown_seen | landed) & gate[:, None]
-        self.previous_touchdown_relative_b.copy_(
-            torch.where(update[..., None], relative, self.previous_touchdown_relative_b)
+        self.previous_touchdown_w.copy_(
+            torch.where(update[..., None], point, self.previous_touchdown_w)
         )
         self.touchdown_seen |= update
         return scaled.sum(dim=1)
@@ -727,10 +771,11 @@ def _single_swing_patterns(contact):
 class ProxyCrawlGaitStatus(ManagerTermBase):
     """Reward new single-foot lift progress while all three other feet support.
 
-    Heights use the calibrated capsule bottom minus this leg's HipX-origin Z, both
-    measured along world vertical. Each foot's last supported value is the
-    reference: lift = (foot_z - hip_z) - (foot_z - hip_z)_last_support.
-    Common foot/hip vertical translation cancels; support may be below the sand surface.
+    Heights use the calibrated capsule bottom's world Z. Each foot's last
+    supported world Z is the reference: lift = foot_z - foot_z_last_support.
+    Neither chassis nor HipX height is subtracted. Whole-robot upward translation
+    therefore contributes if this foot qualifies as the single unloaded foot;
+    chassis/HipX motion with a fixed world-space foot does not. Support may be below the sand surface.
     There is no surface-clearance condition or phase clock. Each foot earns at
     most one unit per swing; support
     resets its credited progress. Initial drops and low commands earn no credit.
@@ -756,7 +801,6 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
         lead = cfg.params.get("max_progress_lead")
         if lead is not None and (not math.isfinite(lead) or lead <= 0):
             raise ValueError("max_progress_lead must be finite and positive")
-        self.hip_body_ids = _ordered_hipx_body_ids(env)
         self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
         self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
         self.peak_progress = torch.zeros_like(self.support_height)
@@ -795,8 +839,7 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
         term = env.action_manager.get_term(action_term_name)
         state = term.contact_state
         contact = state.vertical_contact
-        hip_z = env.scene["robot"].data.body_link_pos_w.torch[:, self.hip_body_ids, 2]
-        height = term.application_points_w[..., 2] - hip_z
+        height = term.application_points_w[..., 2]
         supported = contact & gate[:, None]
         self.support_height.copy_(torch.where(supported, height, self.support_height))
         self.support_seen |= supported

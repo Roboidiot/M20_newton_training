@@ -220,6 +220,7 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
         physics_dt=cfg.sim.dt,
         cfg=SimpleNamespace(sim=SimpleNamespace(physics=cfg.sim.physics.newton_mjwarp), decimation=cfg.decimation),
         scene=SimpleNamespace(),
+        extras={},
     )
 
     class Scene(dict):
@@ -249,6 +250,8 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
     for _ in range(cfg.decimation - 1):
         action.apply_actions()
     assert action.contact_state.vertical_contact.all()
+    torch.testing.assert_close(action.contact_state.force_duration, torch.full((n,), .02))
+    torch.testing.assert_close(action.contact_state.fz_integral, action.force_w[..., 2] * .02)
     assert not action.contact_state.touchdown.any()  # initial support is not a completed swing
     torch.testing.assert_close(action.contact_state.current_contact_time, torch.full((n, 4), 0.02))
 
@@ -283,7 +286,12 @@ def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_
     action.apply_actions()
     torch.testing.assert_close(action.force_history_w[:, 2], applied)
     history_other_env = action.force_history_w[1].clone()
+    duration_other_env = action.contact_state.force_duration[1].clone()
+    expected_fz = action.contact_state.fz_integral[0] / action.contact_state.force_duration[0]
     action.reset([0])
+    torch.testing.assert_close(env.extras["log"]["Metrics/foot_forces/fl_fz_mean"], expected_fz[0])
+    assert action.contact_state.force_duration[0] == 0
+    torch.testing.assert_close(action.contact_state.force_duration[1], duration_other_env)
     assert not action.model.force[0].any()
     assert not action.force_w[0].any()
     assert not action.force_history_w[0].any()

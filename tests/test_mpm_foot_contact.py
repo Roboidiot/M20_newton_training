@@ -90,6 +90,7 @@ def contact_env(monkeypatch):
         step_dt=0.02,
         scene={"robot": asset},
         command_manager=SimpleNamespace(get_command=lambda name: torch.tensor([[0.3, 0.0, 0.0]]).repeat(2, 1)),
+        extras={},
     )
     term = MPMFootContactAction(MPMFootContactActionCfg(), env)
     env.action_manager = SimpleNamespace(get_term=lambda name: term)
@@ -120,6 +121,7 @@ def test_force_is_whole_window_impulse_over_duration_not_last_substep(contact_en
     for _ in range(3):
         torch.testing.assert_close(term.force_w, force)
         torch.testing.assert_close(term.contact_state.current_contact_time, torch.full((2, 4), 0.02))
+        torch.testing.assert_close(term._contact_state.force_duration, torch.full((2,), .02))
     torch.testing.assert_close(term.force_history_w[:, 0], force)
     assert not term.force_history_w[:, 1:].any()
     torch.testing.assert_close(term.application_points_w[..., 2], torch.full((2, 4), 0.21))
@@ -163,3 +165,19 @@ def test_incomplete_window_fails_instead_of_silently_using_wrong_force(contact_e
     _window(term, solver, [torch.zeros(2, 4, 3)], durations=(0.005,))
     with pytest.raises(RuntimeError, match="expected 0.02"):
         _ = term.contact_state
+
+
+def test_mpm_force_logs_use_window_averaged_world_fz_and_publish_before_partial_reset(contact_env):
+    env, term, solver, _ = contact_env
+    a, b = torch.zeros(2, 4, 3), torch.zeros(2, 4, 3)
+    a[..., 2], b[..., 2] = -20., 60.
+    _window(term, solver, [a, b], durations=(.015, .005))
+    torch.testing.assert_close(term.force_w[..., 2], torch.zeros(2, 4), atol=1e-5, rtol=0)
+    b[..., 2] = -40.
+    _window(term, solver, [b] * 4)
+    torch.testing.assert_close(term.force_w[..., 2], torch.full((2, 4), -40.))
+    term.reset([0])
+    torch.testing.assert_close(env.extras["log"]["Metrics/foot_forces/fl_fz_mean"], torch.tensor(-20.))
+    assert len(env.extras["log"]) == 4
+    assert not term._contact_state.force_duration[0]
+    torch.testing.assert_close(term._contact_state.force_duration[1], torch.tensor(.04))
