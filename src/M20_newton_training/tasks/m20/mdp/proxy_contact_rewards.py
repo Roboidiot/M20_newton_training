@@ -1,4 +1,4 @@
-"""Contact-driven Walk rewards backed by applied foot proxy forces, without a ContactSensor."""
+"""Contact-driven Walk rewards shared by proxy, MPM and rigid foot-force providers."""
 
 from __future__ import annotations
 
@@ -54,9 +54,9 @@ class ProxyFootContactState:
         self.touchdown.zero_()
         self.touchdown_air_time.zero_()
 
-    def update(self, force_w, dt, threshold):
-        """Update once per control step with dt=env.step_dt (0.02 s in this task)."""
-        fz = force_w[..., 2]
+    def update(self, force_w, dt, threshold, *, metrics_force_w=None):
+        """Update at control rate; optional metric forces preserve proxy-only Fz logging."""
+        fz = (force_w if metrics_force_w is None else metrics_force_w)[..., 2]
         self.fz_integral.add_(fz * dt)
         self.force_duration.add_(dt)
         # Upward support establishes contact; horizontal drag and downward pull-out
@@ -115,6 +115,21 @@ class ProxyFootContactState:
 def _gait_command_gate(env, command_name, min_command_norm):
     """Use the full [vx, vy, wz] command so pure yaw can still activate stepping."""
     return env.command_manager.get_command(command_name).norm(dim=1) >= min_command_norm
+
+
+def _foot_contact_provider(env, action_term_name, sensor_cfg):
+    if sensor_cfg is None:
+        return env.action_manager.get_term(action_term_name)
+    from .rigid_foot_contact import rigid_foot_contacts
+
+    return rigid_foot_contacts(env, sensor_cfg.name).update()
+
+
+def _reset_rigid_contact_provider(env, cfg, env_ids):
+    sensor = cfg.params.get("sensor_cfg")
+    providers = getattr(env, "_rigid_foot_contact_providers", {})
+    if sensor is not None and sensor.name in providers:
+        providers[sensor.name].reset(env_ids)
 
 
 def sand_base_height_l2(env, target_height, surface_height=0.30):
@@ -496,14 +511,23 @@ def proxy_feet_air_time_command_scaled(
     turn_multiplier=3.0,
     action_term_name="sand_proxy",
     min_command_norm=0.1,
+    sensor_cfg=None,
+    short_air_penalty_scale=1.0,
 ):
     """Score touchdowns only when the full velocity-command norm is large enough.
 
     ``command_threshold`` selects side/turn multipliers; ``min_command_norm``
     independently gates both positive credit and the short-air penalty.
+    ``max_air_time=None`` disables the duration cap without changing the reference threshold.
+    ``short_air_penalty_scale`` scales negative credit per foot, leaving positive credit unchanged.
     """
-    state = env.action_manager.get_term(action_term_name).contact_state
-    credit = ((state.touchdown_air_time.clamp(max=max_air_time) - threshold) * state.touchdown).sum(dim=(1, 2))
+    state = _foot_contact_provider(env, action_term_name, sensor_cfg).contact_state
+    duration = state.touchdown_air_time
+    if max_air_time is not None:
+        duration = duration.clamp(max=max_air_time)
+    per_foot_credit = duration - threshold
+    per_foot_credit = torch.where(per_foot_credit < 0.0, per_foot_credit * short_air_penalty_scale, per_foot_credit)
+    credit = (per_foot_credit * state.touchdown).sum(dim=(1, 2))
     command = env.command_manager.get_command(command_name)
     side = command[:, 1].abs() > command_threshold
     turn = command[:, 2].abs() > command_threshold
@@ -533,7 +557,8 @@ def proxy_feet_slide_ang_z_cmd(
 
 
 def _group_ids(term, names):
-    return [term.cfg.foot_names.index(name) for name in names]
+    foot_names = term.foot_names if hasattr(term, "foot_names") else term.cfg.foot_names
+    return [foot_names.index(name) for name in names]
 
 
 def _diagonal_patterns(contact, a, b):
@@ -664,25 +689,42 @@ class ProxyFootLiftConsistency(ManagerTermBase):
 
 
 class ProxyRotationGaitStatus(ManagerTermBase):
-    """Reward new paired lift progress above each foot's last support position.
+    """Reward paired lift progress or a sustained Rough-style diagonal height status.
 
     Each swing pair can earn at most one normalized unit per swing. Both feet
-    must unload while the opposite diagonal supports the robot. Holding a pose
+    must unload for min_air_time while the opposite diagonal supports the robot. Holding a pose
     or lowering and raising within the already credited height earns nothing.
     Low commands and environment resets clear support history.
+    ``reward_mode="rough"`` instead scores one every valid step whose mean swing
+    height exceeds mean support height by target_height. It needs no support-height
+    history; exact opposing contact and command gates are retained for Walk.
     """
 
     def __init__(self, cfg, env):
         super().__init__(cfg, env)
         if cfg.params.get("target_height", 0.25) <= 0:
             raise ValueError("target_height must be positive")
+        if not math.isfinite(cfg.params.get("min_air_time", 0.0)) or cfg.params.get("min_air_time", 0.0) < 0:
+            raise ValueError("min_air_time must be finite and nonnegative")
+        if cfg.params.get("reward_mode", "progress") not in ("progress", "rough"):
+            raise ValueError("reward_mode must be progress or rough")
         self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
         self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
         self.peak_progress = torch.zeros((env.num_envs, 2), device=env.device)
+        self.completed_steps = torch.zeros((env.num_envs, 4), dtype=torch.long, device=env.device)
+        self.participation_progress = torch.zeros((env.num_envs, 4), device=env.device)
 
     def reset(self, env_ids=None):
+        _log_foot_participation(self._env, "lift_steps", self.completed_steps, self.participation_progress, env_ids)
+        self._reset_state(env_ids)
+        _reset_rigid_contact_provider(self._env, self.cfg, env_ids)
+
+    def _reset_state(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
-        for value in (self.support_height, self.support_seen, self.peak_progress):
+        for value in (
+            self.support_height, self.support_seen, self.peak_progress,
+            self.completed_steps, self.participation_progress,
+        ):
             value[ids] = 0
 
     def __call__(
@@ -694,11 +736,15 @@ class ProxyRotationGaitStatus(ManagerTermBase):
         action_term_name="sand_proxy",
         command_name="base_velocity",
         min_command_norm=0.1,
+        min_air_time=0.0,
+        sensor_cfg=None,
+        reward_mode="progress",
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
-        self.reset(~gate)
-        term = env.action_manager.get_term(action_term_name)
-        contact = term.contact_state.vertical_contact
+        self._reset_state(~gate)
+        term = _foot_contact_provider(env, action_term_name, sensor_cfg)
+        state = term.contact_state
+        contact = state.vertical_contact
         height = term.application_points_w[..., 2]  # calibrated capsule bottoms, in ordered proxy slots
         supported = contact & gate[:, None]
         self.support_height.copy_(torch.where(supported, height, self.support_height))
@@ -710,11 +756,23 @@ class ProxyRotationGaitStatus(ManagerTermBase):
         reward = torch.zeros(env.num_envs, device=env.device)
         # Pattern A means A supports and B swings; progress slots follow the swing pairs.
         for i, swing in enumerate((b, a)):
-            self.peak_progress[:, i] = torch.where(contact[:, swing].all(dim=1), 0.0, self.peak_progress[:, i])
-            valid = patterns[:, i] & self.support_seen[:, swing].all(dim=1) & gate
-            paired = progress[:, swing].amin(dim=1)
-            increment = (paired - self.peak_progress[:, i]).clamp(min=0.0)
-            reward += torch.where(valid, increment, 0.0)
+            landed = contact[:, swing].all(dim=1)
+            completed = landed & (self.peak_progress[:, i] > 0)
+            self.completed_steps[:, swing] += completed[:, None].long()
+            self.participation_progress[:, swing] += torch.where(completed, self.peak_progress[:, i], 0.0)[:, None]
+            self.peak_progress[:, i] = torch.where(landed, 0.0, self.peak_progress[:, i])
+            long_enough = (state.current_air_time[:, swing] + 1e-6 >= min_air_time).all(dim=1)
+            valid = patterns[:, i] & gate & long_enough
+            if reward_mode == "rough":
+                support = a if i == 0 else b
+                difference = height[:, swing].mean(dim=1) - height[:, support].mean(dim=1)
+                paired = (difference > target_height).to(height.dtype)
+                credit = paired
+            else:
+                valid &= self.support_seen[:, swing].all(dim=1)
+                paired = progress[:, swing].amin(dim=1)
+                credit = (paired - self.peak_progress[:, i]).clamp(min=0.0)
+            reward += torch.where(valid, credit, 0.0)
             self.peak_progress[:, i] = torch.where(
                 valid, torch.maximum(self.peak_progress[:, i], paired), self.peak_progress[:, i]
             )
@@ -738,6 +796,7 @@ class ProxyRotationGaitSymmetry(ManagerTermBase):
         ids = slice(None) if env_ids is None else env_ids
         self.pattern_buffer[ids] = 0
         self.samples[ids] = 0
+        _reset_rigid_contact_provider(self._env, self.cfg, env_ids)
 
     def __call__(
         self,
@@ -748,10 +807,11 @@ class ProxyRotationGaitSymmetry(ManagerTermBase):
         action_term_name="sand_proxy",
         command_name="base_velocity",
         min_command_norm=0.1,
+        sensor_cfg=None,
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
         self.reset(~gate)
-        term = env.action_manager.get_term(action_term_name)
+        term = _foot_contact_provider(env, action_term_name, sensor_cfg)
         a = _group_ids(term, group_a_body_names)
         b = _group_ids(term, group_b_body_names)
         patterns = _diagonal_patterns(term.contact_state.vertical_contact, a, b) & gate[:, None]
@@ -813,6 +873,7 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
             self._env, "lift_steps", self.completed_steps, self.participation_progress, env_ids
         )
         self._reset_state(env_ids)
+        _reset_rigid_contact_provider(self._env, self.cfg, env_ids)
 
     def _reset_state(self, env_ids=None):
         ids = slice(None) if env_ids is None else env_ids
@@ -833,10 +894,11 @@ class ProxyCrawlGaitStatus(ManagerTermBase):
         repeat_decay=0.0,
         min_air_time=0.1,
         max_progress_lead=None,
+        sensor_cfg=None,
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
         self._reset_state(~gate)
-        term = env.action_manager.get_term(action_term_name)
+        term = _foot_contact_provider(env, action_term_name, sensor_cfg)
         state = term.contact_state
         contact = state.vertical_contact
         height = term.application_points_w[..., 2]
@@ -884,6 +946,7 @@ class ProxyCrawlGaitSymmetry(ManagerTermBase):
         ids = slice(None) if env_ids is None else env_ids
         self.pattern_buffer[ids] = 0
         self.samples[ids] = 0
+        _reset_rigid_contact_provider(self._env, self.cfg, env_ids)
 
     def __call__(
         self,
@@ -892,10 +955,11 @@ class ProxyCrawlGaitSymmetry(ManagerTermBase):
         action_term_name="sand_proxy",
         command_name="base_velocity",
         min_command_norm=0.1,
+        sensor_cfg=None,
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
         self.reset(~gate)
-        term = env.action_manager.get_term(action_term_name)
+        term = _foot_contact_provider(env, action_term_name, sensor_cfg)
         patterns = _single_swing_patterns(term.contact_state.vertical_contact) & gate[:, None]
         self.pattern_buffer[:, :, self.buffer_idx] = patterns
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size

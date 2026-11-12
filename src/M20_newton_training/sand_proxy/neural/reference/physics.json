@@ -1,0 +1,54 @@
+{
+  "time": {
+    "physics_dt_s": 0.005,
+    "control_dt_s": 0.02
+  },
+  "material": {
+    "density": 1700.0,
+    "young_modulus": 1000000000000000.0,
+    "poisson_ratio": 0.3,
+    "viscosity": 0.0,
+    "friction": 0.7,
+    "damping": 0.005,
+    "yield_pressure": 1000000000000.0,
+    "tensile_yield_ratio": 0.0,
+    "yield_stress": 0.0,
+    "hardening": 0.0,
+    "dilatancy": 0.0,
+    "hardening_rate": 1.0,
+    "softening_rate": 1.0
+  },
+  "mpm": {
+    "max_iterations": 250,
+    "tolerance": 1e-05,
+    "solver": "auto",
+    "warmstart_mode": "auto",
+    "collider_velocity_mode": "forward",
+    "voxel_size": 0.02,
+    "grid_type": "sparse",
+    "grid_padding": 1,
+    "max_active_cell_count": -1,
+    "max_leaf_node_count": -1,
+    "max_lower_node_count": -1,
+    "max_upper_node_count": -1,
+    "separate_worlds": true,
+    "transfer_scheme": "apic",
+    "integration_scheme": "pic",
+    "critical_fraction": 0.0,
+    "air_drag": 1.0,
+    "collider_normal_from_sdf_gradient": false,
+    "collider_basis": "pic27",
+    "strain_basis": "P0",
+    "velocity_basis": "Q1"
+  },
+  "particles": {
+    "particles_per_cell": 1.0,
+    "jitter_fraction": 0.3
+  },
+  "coupling": {
+    "mode": "staggered",
+    "mass_scale": 1.0,
+    "iterations": 1,
+    "robot_substeps": 2
+  }
+}

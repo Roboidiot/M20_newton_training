@@ -8,6 +8,8 @@ import warp as wp
 
 from isaaclab_newton.physics import NewtonManager
 
+from isaaclab_tasks.utils import resolve_task_config
+
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import DeeproboticsM20WalkOnSandEnvCfg
 from M20_newton_training.tasks.m20.mdp.mpm_foot_contact import (
     MPMFootContactAction,
@@ -16,6 +18,17 @@ from M20_newton_training.tasks.m20.mdp.mpm_foot_contact import (
 )
 
 FEET = ("fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel")
+
+
+@pytest.mark.parametrize("play_mode", [False, True])
+@pytest.mark.parametrize("overrides", [[], ["physics=newton_sand"]])
+def test_native_task_resolution_keeps_mpm_sampling_eager(play_mode, overrides):
+    cfg, _ = resolve_task_config(
+        "M20NewtonTraining-M20-M20-WalkOnSand", None, play_mode=play_mode, overrides=overrides
+    )
+    assert cfg.sim.physics.use_cuda_graph is False
+    assert {entry.name for entry in cfg.sim.physics.solver_cfg.entries} == {"robot", "sand"}
+    assert cfg.sim.dt * cfg.decimation == pytest.approx(0.02)
 
 
 def _labels(num_envs=2):
@@ -107,6 +120,21 @@ def _window(term, solver, forces, durations=(0.005,) * 4):
         solver.step(None, None, None, None, dt)
 
 
+def test_rigid_backend_error_takes_precedence_over_cuda_graph(contact_env, monkeypatch):
+    env, _, _, _ = contact_env
+    env.cfg.sim.physics.use_cuda_graph = True
+    monkeypatch.setattr(NewtonManager, "_solver", SimpleNamespace())
+    with pytest.raises(ValueError, match="use physics=newton_sand instead of physics=newton_mjwarp"):
+        MPMFootContactAction(MPMFootContactActionCfg(), env)
+
+
+def test_coupled_backend_rejects_graph_replay_with_actionable_override(contact_env):
+    env, _, _, _ = contact_env
+    env.cfg.sim.physics.use_cuda_graph = True
+    with pytest.raises(ValueError, match="physics=newton_sand env.sim.physics.use_cuda_graph=False"):
+        MPMFootContactAction(MPMFootContactActionCfg(), env)
+
+
 def test_force_is_whole_window_impulse_over_duration_not_last_substep(contact_env):
     _, term, solver, _ = contact_env
     assert term.action_dim == 0 and term.raw_actions.shape == term.processed_actions.shape == (2, 0)
@@ -152,9 +180,10 @@ def test_airtime_touchdown_and_partial_reset_use_50hz_vertical_contact(contact_e
     torch.testing.assert_close(term.contact_state.current_air_time[:, :2], torch.full((2, 2), 0.10))
     assert term.contact_state.contact.all() and not term.contact_state.vertical_contact[:, :2].any()
     _window(term, solver, [support] * 4)
-    torch.testing.assert_close(reward_func(env, **reward.params), torch.full((2,), 0.04))
+    expected = 2 * (6 * env.step_dt - reward.params["threshold"])
+    torch.testing.assert_close(reward_func(env, **reward.params), torch.full((2,), expected))
     assert term.contact_state.touchdown.sum() == 4
-    torch.testing.assert_close(reward_func(env, **reward.params), torch.full((2,), 0.04))
+    torch.testing.assert_close(reward_func(env, **reward.params), torch.full((2,), expected))
     term.reset([0])
     assert not term.contact_state.has_contact[0].any() and not term.force_history_w[0].any()
     assert term.contact_state.has_contact[1].all() and term.force_history_w[1].any()

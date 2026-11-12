@@ -1,0 +1,75 @@
+{
+  "wheels": [
+    {
+      "body_name": "fl_wheel",
+      "prim_path": "/M20/fl_wheel/collisions/mesh_0/capsule",
+      "local_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "local_axis": [
+        0.0,
+        -0.9999999999999993,
+        -3.422854133461328e-08
+      ],
+      "radius": 0.09000000357627869,
+      "half_length": 0.027000000700354573
+    },
+    {
+      "body_name": "fr_wheel",
+      "prim_path": "/M20/fr_wheel/collisions/mesh_0/capsule",
+      "local_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "local_axis": [
+        0.0,
+        -0.9999999999999993,
+        -3.422854133461328e-08
+      ],
+      "radius": 0.09000000357627869,
+      "half_length": 0.027000000700354573
+    },
+    {
+      "body_name": "hl_wheel",
+      "prim_path": "/M20/hl_wheel/collisions/mesh_0/capsule",
+      "local_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "local_axis": [
+        0.0,
+        -0.9999999999999993,
+        -3.422854133461328e-08
+      ],
+      "radius": 0.09000000357627869,
+      "half_length": 0.027000000700354573
+    },
+    {
+      "body_name": "hr_wheel",
+      "prim_path": "/M20/hr_wheel/collisions/mesh_0/capsule",
+      "local_center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "local_axis": [
+        0.0,
+        -0.9999999999999993,
+        -3.422854133461328e-08
+      ],
+      "radius": 0.09000000357627869,
+      "half_length": 0.027000000700354573
+    }
+  ],
+  "usd_layers_sha256": {
+    "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/deep_robotics_model/M20/M20_usd/configuration/M20_physics.usd": "212adca7499b9b63665975eb329ab496bec12367c0594d2971ad1743be7a5a9f",
+    "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/deep_robotics_model/M20/M20_usd/M20.usd": "378f8498b796cbe6512b9c7ff9eb01cd8eb6806e8acd3486f6263561c017428a",
+    "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/deep_robotics_model/M20/M20_usd/configuration/M20_sensor.usd": "caf3de23eb1d88521b8e0e7559b377ce42b17bfaceb78a8c29486b1b911d32a7",
+    "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/deep_robotics_model/M20/M20_usd/configuration/M20_base.usd": "cd5198d0980a9d3313ea20050879eb16a7ec5dc9f4f7145d0fb8e014cce4e47e",
+    "/home/mhc/ROBOT/M20_newton_training/M20_newton_training/deep_robotics_model/M20/M20_usd/configuration/M20_robot.usd": "ccf75113ccca6ff132daced5f12f574319348fa96dd6ae2d58547348438c6789"
+  }
+}

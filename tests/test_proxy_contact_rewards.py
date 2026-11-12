@@ -794,27 +794,27 @@ def test_crawl_rewards_reject_invalid_scales(cls, params):
     (DeeproboticsM20WalkOnSandProxyEnvCfg, "sand_proxy"),
     (DeeproboticsM20WalkOnSandEnvCfg, "mpm_contact"),
 ])
-def test_active_sand_tasks_reward_crawl_height_and_phase_while_all_feet_stay_buried(cfg_cls, provider):
+def test_active_sand_tasks_reward_diagonal_lift_and_phase_while_all_feet_stay_buried(cfg_cls, provider):
     env = _env()
     cfg = cfg_cls()
     assert cfg.rewards.feet_sand_clearance is None
     lift = cfg.rewards.rotation_gait_status
     phase = cfg.rewards.rotation_gait_symmetry
-    assert lift.func is ProxyCrawlGaitStatus and lift.weight > 0.
-    assert phase.func is ProxyCrawlGaitSymmetry and phase.weight > 0.
-    assert lift.params["repeat_decay"] == 1.0
+    assert lift.func is ProxyRotationGaitStatus and lift.weight > 0.
+    assert phase.func is ProxyRotationGaitSymmetry and phase.weight > 0.
+    assert "repeat_decay" not in lift.params
     assert "max_progress_lead" not in lift.params
     assert cfg.rewards.feet_air_time.func is proxy_feet_air_time_command_scaled
     assert "max_progress_lead" not in cfg.rewards.feet_air_time.params
     assert "participation_time" not in cfg.rewards.feet_air_time.params
     assert cfg.rewards.feet_forward_step.params["repeat_decay"] == 1.0
     assert "max_progress_lead" not in cfg.rewards.feet_forward_step.params
-    assert lift.params["min_air_time"] == .1
+    assert lift.params["min_air_time"] == .5
     assert lift.params["action_term_name"] == phase.params["action_term_name"] == provider
-    assert lift.params["target_height"] == 0.30
-    assert phase.params["window_s"] == 2.0
+    assert lift.params["target_height"] == 0.20
+    assert phase.params["window_s"] == 4.0
     assert cfg.rewards.feet_forward_step.params["target_stride"] > 0.
-    assert cfg.rewards.feet_forward_step.params["min_air_time"] == .1
+    assert cfg.rewards.feet_forward_step.params["min_air_time"] == .5
     assert "target_clearance" not in cfg.rewards.feet_forward_step.params
     assert cfg.rewards.feet_forward_step.weight > 0.
     height = env.term.application_points_w[..., 2]
@@ -823,24 +823,26 @@ def test_active_sand_tasks_reward_crawl_height_and_phase_while_all_feet_stay_bur
     lift_reward = lift.func(lift, env)
     phase_reward = phase.func(phase, env)
     assert not lift_reward(env, **lift.params).any()
-    assert phase_reward.buffer_size == 100  # Two seconds at 50 Hz.
-    for foot in range(4):
+    assert phase_reward.buffer_size == 200  # Four seconds at 50 Hz.
+    steps = round(lift.params["min_air_time"] / env.step_dt)
+    for swing in ([0, 3], [1, 2]):
         height[:] = -0.30
         _support(env, [0, 1, 2, 3])
         lift_reward(env, **lift.params)
         phase_reward(env, **phase.params)
-        height[:, foot] += .15
-        for sample in range(5):
-            _support(env, [other for other in range(4) if other != foot])
-            expected = .5 if sample == 4 else 0.
+        height[:, swing[0]] += .10
+        height[:, swing[1]] += .20
+        for sample in range(steps):
+            _support(env, [other for other in range(4) if other not in swing])
+            expected = .5 if sample == steps - 1 else 0.
             torch.testing.assert_close(lift_reward(env, **lift.params), torch.full((env.num_envs,), expected))
             result = phase_reward(env, **phase.params)
             assert (height < 0.30).all()  # No clearance of the nominal sand surface.
-        height[:, foot] = -.30
+        height[:, swing] = -.30
         _support(env, [0, 1, 2, 3])
         lift_reward(env, **lift.params)
         result = phase_reward(env, **phase.params)
-    torch.testing.assert_close(result, torch.full((env.num_envs,), .2))
+    torch.testing.assert_close(result, torch.full((env.num_envs,), 2 * steps / phase_reward.buffer_size))
 
 
 def _crawl_cycle(env, reward, params, foot, lift=.30):

@@ -16,6 +16,12 @@ from M20_newton_training.tasks.m20.config.M20.flat_env_cfg import DeeproboticsM2
 from M20_newton_training.tasks.m20.config.M20.rough_env_cfg import DeeproboticsM20RoughEnvCfg
 from M20_newton_training.tasks.m20.config.M20.walk_env_cfg import DeeproboticsM20WalkEnvCfg
 from M20_newton_training.tasks.m20.mdp import rewards as shared_rewards
+from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
+    ProxyRotationGaitStatus,
+    ProxyRotationGaitSymmetry,
+    proxy_feet_air_time_command_scaled,
+)
+from M20_newton_training.tasks.m20.mdp.single_axis_velocity import SingleAxisVelocityCommandCfg
 from M20_newton_training.tasks.m20.mdp.walk_rewards import (
     feet_air_time_command_scaled,
     wheel_velocity_command_scaled_l2,
@@ -106,7 +112,11 @@ def test_walk_keeps_flat_interfaces_and_other_weights_without_mutating_siblings(
     assert to_dict(walk.scene) == to_dict(flat.scene)
     assert to_dict(walk.observations) == to_dict(flat.observations)
     assert to_dict(walk.actions) == to_dict(flat.actions)
-    assert to_dict(walk.commands) == to_dict(flat.commands)
+    command = walk.commands.base_velocity
+    assert isinstance(command, SingleAxisVelocityCommandCfg)
+    assert command.ranges.lin_vel_x == (0.25, 0.4)
+    assert command.ranges.lin_vel_y == command.ranges.ang_vel_z == (0.0, 0.0)
+    assert command.rel_standing_envs == 0.0 and not command.heading_command
     assert to_dict(walk.events) == to_dict(flat.events)
     assert to_dict(walk.terminations) == to_dict(flat.terminations)
     assert walk.scene.contact_forces.track_air_time
@@ -116,11 +126,51 @@ def test_walk_keeps_flat_interfaces_and_other_weights_without_mutating_siblings(
     assert rough.curriculum.terrain_levels is not None
     assert walk.rewards.feet_air_time_ang_z_M20 is None
     assert flat.rewards.feet_air_time_ang_z_M20.weight == 50.0
-    assert walk.rewards.feet_air_time.func is feet_air_time_command_scaled
+    assert walk.rewards.feet_air_time.func is proxy_feet_air_time_command_scaled
+    assert walk.rewards.feet_air_time.params["threshold"] == 0.3
+    assert walk.rewards.feet_air_time.params["short_air_penalty_scale"] == 0.5
+    assert walk.rewards.feet_air_time.params["max_air_time"] is None
+    assert walk.rewards.rotation_gait_status.func is ProxyRotationGaitStatus
+    assert walk.rewards.rotation_gait_status.params["min_air_time"] == 0.0
+    assert walk.rewards.rotation_gait_status.params["reward_mode"] == "rough"
+    assert walk.rewards.rotation_gait_status.params["target_height"] == 0.10
+    assert walk.rewards.rotation_gait_status.weight == 5.0
+    assert walk.rewards.rotation_gait_symmetry.func is ProxyRotationGaitSymmetry
+    assert walk.rewards.rotation_gait_symmetry.weight == 15.0
+    assert "min_air_time" not in walk.rewards.rotation_gait_symmetry.params
+    assert walk.rewards.rotation_gait_symmetry.params["group_a_body_names"] == ["fl_wheel", "hr_wheel"]
+    assert walk.rewards.rotation_gait_symmetry.params["group_b_body_names"] == ["fr_wheel", "hl_wheel"]
+    assert walk.rewards.rotation_gait_symmetry.params["window_s"] == 4.0
     assert walk.rewards.joint_vel_wheel_l2.func is wheel_velocity_command_scaled_l2
-    assert walk.rewards.feet_air_time.weight == 10.0
+    assert walk.rewards.feet_air_time.weight == 50.0
+    assert walk.rewards.flat_orientation_l2.weight == -10.0
     assert walk.rewards.joint_vel_wheel_l2.weight == -0.2
-    changed_terms = {"feet_air_time", "feet_air_time_ang_z_M20", "joint_vel_wheel_l2"}
+    assert walk.rewards.base_height_l2.weight == -10.0
+    assert walk.rewards.base_height_l2.params["target_height"] == 0.58
+    assert walk.rewards.base_height_l2.params["sensor_cfg"] is None
+    changed_terms = {
+        "flat_orientation_l2",
+        "base_height_l2",
+        "feet_air_time",
+        "feet_air_time_ang_z_M20",
+        "joint_vel_wheel_l2",
+        "rotation_gait_status",
+        "rotation_gait_symmetry",
+    }
+    disabled_terms = {
+        "ang_vel_xy_l2",
+        "lin_vel_z_l2",
+        "joint_mirror",
+        "joint_torques_l2",
+        "hipx_joint_pos_penalty",
+        "hipy_joint_pos_penalty",
+        "knee_joint_pos_penalty",
+        "action_rate_l2",
+        "contact_forces",
+    }
+    for name in disabled_terms:
+        assert getattr(walk.rewards, name) is None
+    changed_terms.update(disabled_terms)
     for name, term in vars(flat.rewards).items():
         if name not in changed_terms:
             assert to_dict(getattr(walk.rewards, name)) == to_dict(term)

@@ -78,11 +78,18 @@ class MPMFootContactAction(ActionTerm):
         super().__init__(cfg, env)
         self._export_IO_descriptor = False
         physics = env.cfg.sim.physics
-        if getattr(physics, "use_cuda_graph", False):
-            raise ValueError("MPM foot impulse sampling requires sim.physics.use_cuda_graph=False")
         root = NewtonManager._solver  # IsaacLab 3.0 has no public coupled-solver accessor.
         if not callable(getattr(root, "solver", None)) or cfg.entry_name not in root.entry_names():
-            raise ValueError("MPM foot contacts require the coupled sand backend: physics=newton_sand")
+            raise ValueError(
+                "MPM foot contacts require the coupled sand backend: use physics=newton_sand "
+                "instead of physics=newton_mjwarp. The rigid-only backend does not simulate sand particles."
+            )
+        if getattr(physics, "use_cuda_graph", False):
+            raise ValueError(
+                "MPM foot impulse sampling requires sim.physics.use_cuda_graph=False. "
+                "Use physics=newton_sand env.sim.physics.use_cuda_graph=False; "
+                "Python impulse sampling cannot run during CUDA Graph replay."
+            )
         self.solver = root.solver(cfg.entry_name)
         if not callable(getattr(self.solver, "collect_collider_impulses", None)):
             raise ValueError(f"Entry {cfg.entry_name!r} does not expose MPM collider impulses")

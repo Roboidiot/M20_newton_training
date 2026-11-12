@@ -45,17 +45,31 @@ def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_
     assert to_dict(cfg.commands) == to_dict(proxy.commands)
     assert to_dict(cfg.terminations) == to_dict(proxy.terminations)
     sand_terminations = to_dict(cfg.terminations)
-    assert sand_terminations.pop("base_height_low")["time_out"] is False
-    assert sand_terminations.pop("front_wheels_low")["time_out"] is False
+    assert sand_terminations.pop("base_height_low") is None
+    assert sand_terminations.pop("front_wheels_low") is None
     assert sand_terminations == to_dict(walk.terminations)
     physics = to_dict(cfg.sim.physics)
     physics["newton_sand"]["use_cuda_graph"] = True
     physics["default"]["use_cuda_graph"] = True
     assert physics == to_dict(sand.sim.physics)
-    for name in ("sand", "sand_tray_floor", "sand_tray_north", "sand_tray_south", "sand_tray_east", "sand_tray_west"):
+    for name in ("sand_tray_floor", "sand_tray_north", "sand_tray_south", "sand_tray_east", "sand_tray_west"):
         assert to_dict(getattr(cfg.scene, name)) == to_dict(getattr(sand.scene, name))
+    assert cfg.scene.sand.spawn.lower[2] == 0.0
+    assert cfg.scene.sand.spawn.upper[2] == pytest.approx(0.20)
+    assert sand.scene.sand.spawn.upper[2] == pytest.approx(0.30)
     assert cfg.scene.env_spacing == sand.scene.env_spacing
     assert to_dict(cfg.scene.robot.init_state) == to_dict(proxy.scene.robot.init_state)
+    assert cfg.scene.robot.init_state.pos[2] == pytest.approx(0.73)
+    assert proxy.actions.sand_proxy.surface_height == 0.20
+    assert proxy.scene.sand_surface_visual.init_state.pos[2] == pytest.approx(0.198)
+    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.20
+    assert cfg.rewards.track_lin_vel_xy_exp.func is shared_rewards.track_lin_vel_xy_exp
+    assert cfg.rewards.track_lin_vel_xy_exp.params == {"command_name": "base_velocity", "std": 0.5}
+    assert cfg.rewards.track_lin_vel_xy_exp.weight == 5.0
+    assert cfg.rewards.track_ang_vel_z_exp is None
+    assert cfg.terminations.base_height_low is None
+    assert cfg.rewards.base_height_reset_penalty is None
+    assert cfg.rewards.front_wheels_reset_penalty is None
     assert to_dict(cfg.events) == to_dict(proxy.events)
     assert cfg.scene.height_scanner is None
     assert to_dict(cfg.scene.height_scanner_base) == to_dict(walk.scene.height_scanner_base)

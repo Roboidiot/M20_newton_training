@@ -12,8 +12,8 @@ from isaaclab.managers import SceneEntityCfg
 def base_height_low(env, minimum_height: float = 0.60, asset_cfg: SceneEntityCfg | None = None) -> torch.Tensor:
     """Terminate when the base-link origin reaches a low world-up height above the environment origin.
 
-    This is not clearance above the nominal sand surface: a 0.30 m surface and
-    minimum_height=0.60 correspond to 0.30 m nominal base clearance.
+    This is not clearance above the nominal sand surface: a 0.20 m surface and
+    minimum_height=0.60 correspond to 0.40 m nominal base clearance.
     """
     if not math.isfinite(minimum_height) or minimum_height <= 0:
         raise ValueError("minimum_height must be finite and positive")

@@ -18,10 +18,9 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     rotate_xyzw,
 )
 from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
-    ProxyCrawlGaitStatus,
-    ProxyCrawlGaitSymmetry,
-    ProxyFootClearanceReward,
     ProxyFootForwardStepReward,
+    ProxyRotationGaitStatus,
+    ProxyRotationGaitSymmetry,
     proxy_feet_air_time_command_scaled,
     proxy_hipx_symmetry_l2,
     sand_base_height_l2,
@@ -115,33 +114,30 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
         "joint_torques_l2",
     ):
         assert getattr(cfg.rewards, name) is None
-    for name, func, weight in (
-        ("feet_air_time", proxy_feet_air_time_command_scaled, 5.0),
-        ("rotation_gait_status", ProxyCrawlGaitStatus, 200.0),
-        ("feet_sand_clearance", ProxyFootClearanceReward, 20.0),
-        ("feet_forward_step", ProxyFootForwardStepReward, 5.0),
-        ("rotation_gait_symmetry", ProxyCrawlGaitSymmetry, 2.5),
+    # Weights remain user-tunable shared sand settings; compare both live configurations instead
+    # of freezing an obsolete analytical-era reward table here.
+    shared_rewards = to_dict(DeeproboticsM20WalkOnSandEnvCfg().rewards)
+    for term in shared_rewards.values():
+        if term is not None and term["params"].get("action_term_name") == "mpm_contact":
+            term["params"]["action_term_name"] = "sand_proxy"
+    assert to_dict(cfg.rewards) == shared_rewards
+    assert cfg.actions.sand_proxy.model_kind == "neural"
+    assert cfg.sim.dt == 0.005 and cfg.decimation == 4
+    for name, func in (
+        ("feet_air_time", proxy_feet_air_time_command_scaled),
+        ("rotation_gait_status", ProxyRotationGaitStatus),
+        ("feet_forward_step", ProxyFootForwardStepReward),
+        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry),
     ):
         term = getattr(cfg.rewards, name)
-        assert term.func is func and term.weight == weight
+        assert term.func is func and term.weight > 0
         assert term.params["action_term_name"] == "sand_proxy"
         assert "sensor_cfg" not in term.params
         assert term.params["min_command_norm"] == 0.1
-    assert cfg.rewards.hipx_joint_pos_penalty.weight == -0.25
     assert cfg.rewards.hipx_symmetry.func is proxy_hipx_symmetry_l2
-    assert cfg.rewards.hipx_symmetry.weight == -0.5
-    assert cfg.rewards.hipx_symmetry.params["asset_cfg"].preserve_order
     assert cfg.rewards.base_height_l2.func is sand_base_height_l2
-    assert cfg.rewards.base_height_l2.weight == -10.0
-    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.30
-    assert cfg.rewards.base_height_l2.params["target_height"] > 0  # User-tunable posture target.
-    assert cfg.rewards.rotation_gait_status.params["target_height"] == 0.30
-    assert cfg.rewards.rotation_gait_symmetry.params["window_s"] == 2.0
-    assert cfg.rewards.flat_orientation_l2.weight == -20.0
-    assert cfg.rewards.action_rate_l2.weight == -0.01
-    assert cfg.rewards.joint_vel_wheel_l2.weight == -10.0
-    assert cfg.rewards.track_lin_vel_xy_exp.weight == 5.0
-    assert cfg.rewards.track_ang_vel_z_exp.weight == 2.0
+    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.20
+    assert cfg.rewards.base_height_l2.params["target_height"] > 0
     assert not hasattr(cfg.rewards, "command_progress")
     assert cfg.commands.base_velocity.ranges.lin_vel_x == (0.15, 0.25)
     assert cfg.commands.base_velocity.ranges.lin_vel_y == (0.0, 0.0)
@@ -186,6 +182,10 @@ def test_proxy_depth_termination_is_disabled_but_explicit_override_remains_avail
 
 def test_force_action_has_zero_policy_dimensions_and_applies_at_wheel_bottom_in_world_frame():
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
+    cfg.actions.sand_proxy.model_kind = "analytical"
+    cfg.actions.sand_proxy.model_path = str(DEFAULT_MODEL_PATH)
+    cfg.actions.sand_proxy.rigid_contact_sensor = None  # Preserve the standalone analytical force/timing check.
+    cfg.sim.dt, cfg.decimation = 0.0005, 40
     n = 2
     pos = torch.zeros((n, 4, 3))
     pos[..., 2] = cfg.actions.sand_proxy.surface_height + 0.05

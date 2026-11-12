@@ -1,7 +1,8 @@
 # M20 沙地 PINN 数据采集
 
-独立采集工具：不导入 `sand_proxy_lab`，不读取代理模型、拟合系数或策略 checkpoint。
-复用项目的 M20 机器人和 `WalkOnSand` 物理场景，采集逻辑、随机策略和记录器均在本目录。
+独立采集工具：不导入 `sand_proxy_lab`，不读取代理模型或拟合系数。
+默认使用随机动作；指定 `--checkpoint` 可使用训练好的策略。
+复用项目的 M20 机器人和 `WalkOnSand` 物理场景，采集逻辑、策略入口和记录器均在本目录。
 
 ## 目录
 
@@ -17,7 +18,7 @@ sand_pinn_lab/
     record.py             # MPM逐步记录及沙力/力矩归约
     geometry.py           # USD几何与坐标变换
     surface.py            # 沙面估计
-    policy.py             # 慢变化随机动作
+    policy.py             # 慢变化随机动作 / checkpoint确定性Actor推理
     storage.py            # 分块保存
     validate.py           # 数据完整性检查
     tests/                # 配置、数值与存储验证
@@ -157,6 +158,47 @@ Ctrl+C/SIGTERM 在控制步边界停止并保存剩余数据。强制杀死进�
 ```bash
 .venv/bin/python -m sand_pinn_lab.collect --action-limit 2.5 --hold-seconds 1 2 --transition-seconds 0.3
 ```
+
+## 已训练策略在MPM中的行走采集
+
+使用代理沙地训练好的group2策略，但仿真中的接触力来自真实MPM，不启用代理力，也不更新网络：
+
+```bash
+bash sand_pinn_lab/experiment/collect_group02_mpm.sh
+```
+
+等价命令：
+
+```bash
+.venv/bin/python -m sand_pinn_lab.collect \
+  --checkpoint logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/2026-11-07_21-23-23_198a52_02_group_02/model_12500.pt \
+  --command 0.2 0 0 \
+  --episodes 20 --episode-seconds 10
+```
+
+默认读取checkpoint同目录的`params/agent.yaml`，也可以用`--agent-config`指定。
+只加载Actor及保存的观测归一化状态，使用确定性均值动作和训练时的动作限幅，不加载优化器。
+要求当前M20的57维Actor观测、16维动作与checkpoint兼容，严格校验网络权重。
+每个控制步先写入机身坐标系的固定`[vx,vy,wz]`指令，再重新计算观测，避免策略读取上一时刻指令。
+前0.5秒仍为零指令、零动作的准备时间，包含在每回合10秒中。
+
+其他物理配置、沉降/重置流程、200Hz采样、50Hz动作及每秒分块均沿用随机采集。
+默认20回合共40000帧，输出至新的`data/policy_model_12500_<时间>/`目录，不修改旧随机数据。
+NPZ字段名称、形状、单位和坐标系与随机采集相同，仍是schema_version=2；无需更换加载器。
+为保持兼容，`random_target`存储本控制步实际执行的Actor动作（准备期为零），`random_segment=-1`，
+其含义、checkpoint路径/哈希、指令和推理方式记在`metadata.json.policy`中。
+不在NPZ中增加字段；本次固定指令可由元数据和`warmup`标志恢复。
+
+沿用原固定时长回合：跌倒、走出沙床均不提前重置，相关标记继续记录。
+10秒前进可能走出有限沙床；只研究沙内运动时应结合`base_outside_tray`、局部沙面有效性和下陷字段筛选，
+或通过`--episode-seconds 5`缩短回合。同一个确定性策略和固定初始条件下，多回合轨迹可能很接近。
+可以在启动脚本后追加参数覆盖，例如：
+
+```bash
+bash sand_pinn_lab/experiment/collect_group02_mpm.sh --episodes 2 --episode-seconds 2 --viz newton
+```
+
+运行需要可访问的CUDA GPU。无GPU时可以检查配置和测试Actor，但不会生成或伪造MPM行走数据。
 
 ## 文件和数据约定
 

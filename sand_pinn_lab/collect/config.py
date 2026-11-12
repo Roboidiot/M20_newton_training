@@ -10,7 +10,19 @@ DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 
 
 def parse_args(argv=None):
-    p = argparse.ArgumentParser(description="Independent M20 random-action MPM data collection.")
+    p = argparse.ArgumentParser(description="Independent M20 random-action or trained-policy MPM data collection.")
+    p.add_argument("--checkpoint", type=Path, help="RSL-RL checkpoint; omit to retain slow random actions")
+    p.add_argument(
+        "--agent-config", type=Path, help="Saved agent.yaml; default <checkpoint-directory>/params/agent.yaml"
+    )
+    p.add_argument(
+        "--command",
+        type=float,
+        nargs=3,
+        default=[0.2, 0.0, 0.0],
+        metavar=("VX", "VY", "WZ"),
+        help="Fixed body-frame command for a trained policy; zero during warmup",
+    )
     p.add_argument(
         "--physics-config", type=Path, help="Partial/full physics JSON; overlays collect/configs/default.json"
     )
@@ -39,6 +51,16 @@ def parse_args(argv=None):
     p.add_argument("--output-dir", type=Path, help="New run directory; default sand_pinn_lab/data/<timestamp>")
     p.add_argument("--chunk-seconds", type=float, default=1.0, help="Flush one compressed chunk per simulated second")
     args = p.parse_args(argv)
+    if args.agent_config is not None and args.checkpoint is None:
+        p.error("--agent-config requires --checkpoint")
+    if args.checkpoint is not None:
+        args.checkpoint = args.checkpoint.expanduser().resolve()
+        args.agent_config = (
+            (args.agent_config or args.checkpoint.parent / "params" / "agent.yaml").expanduser().resolve()
+        )
+        for path in (args.checkpoint, args.agent_config):
+            if not path.is_file():
+                p.error(f"File does not exist: {path}")
     try:
         args.physics = load_physics_config(args.physics_config, args.physics_overrides)
     except (ValueError, OSError) as exc:
@@ -53,6 +75,7 @@ def parse_args(argv=None):
         args.transition_seconds,
         args.chunk_seconds,
         *args.start_xy,
+        *args.command,
     ]
     if not all(math.isfinite(x) for x in numbers):
         p.error("Numeric parameters must be finite")
@@ -79,9 +102,12 @@ def environment_config(args):
     """Reuse the physical M20 scene, independently configure collection (no shadow imports)."""
     from isaaclab.utils import replace
 
+    from M20_newton_training.tasks.m20.config.M20.sand_env_cfg import DeeproboticsM20SandSceneCfg
     from M20_newton_training.tasks.m20.config.M20.walk_on_sand_env_cfg import DeeproboticsM20WalkOnSandEnvCfg
 
     cfg = DeeproboticsM20WalkOnSandEnvCfg()
+    # Collection keeps its original 0.30 m reference bed independently of walking-training height changes.
+    cfg.scene.sand = replace(cfg.scene.sand, spawn=DeeproboticsM20SandSceneCfg().sand.spawn)
     cfg.sim.physics = cfg.sim.physics.newton_sand
     apply_physics_config(cfg, args.physics)
     cfg.sim.device = args.device

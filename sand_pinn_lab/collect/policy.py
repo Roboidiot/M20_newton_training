@@ -1,4 +1,4 @@
-"""Seeded, slow random joint-target excitation; independent of RL libraries."""
+"""Slow random excitation and optional deterministic RSL-RL actor inference."""
 
 import numpy as np
 
@@ -25,3 +25,71 @@ class SlowRandomPolicy:
         alpha = alpha * alpha * (3 - 2 * alpha)
         self.current = (self.start + alpha * (self.target - self.start)).astype(np.float32)
         return self.current.copy()
+
+
+class CheckpointPolicy:
+    """Load only the saved actor, including its observation normalizer; never run PPO.
+
+    Random-only collection does not import Torch/RSL-RL through this module.
+    The legacy random_target field stores the executed policy action and
+    random_segment is -1; metadata identifies these compatibility fields.
+    """
+
+    def __init__(self, checkpoint, agent_config, device="cpu"):
+        import torch
+        import yaml
+        from rsl_rl.models import MLPModel
+        from tensordict import TensorDict
+
+        class ConfigLoader(yaml.SafeLoader):
+            pass
+
+        ConfigLoader.add_constructor(
+            "tag:yaml.org,2002:python/tuple", lambda loader, node: tuple(loader.construct_sequence(node))
+        )
+        with open(agent_config) as stream:
+            config = yaml.load(stream, Loader=ConfigLoader)
+        actor_cfg = dict(config["actor"])
+        if actor_cfg.pop("class_name") != "MLPModel":
+            raise ValueError("Collection supports the M20 MLPModel actor only")
+        self.obs_groups = config["obs_groups"]
+        if self.obs_groups.get("actor") != ["policy"]:
+            raise ValueError("Expected the M20 actor observation group ['policy']")
+        self.device = device
+        sample = TensorDict({"policy": torch.zeros(1, 57, device=device)}, batch_size=[1])
+        self.actor = MLPModel(sample, self.obs_groups, "actor", 16, **actor_cfg).to(device)
+        loaded = torch.load(checkpoint, map_location=device, weights_only=True)
+        self.actor.load_state_dict(loaded["actor_state_dict"], strict=True)
+        self.actor.eval()
+        self.actor.requires_grad_(False)
+        self.clip_actions = config.get("clip_actions")
+        if self.clip_actions is not None and (not np.isfinite(self.clip_actions) or self.clip_actions <= 0):
+            raise ValueError("clip_actions must be positive and finite or null")
+        self.target = np.zeros(16, dtype=np.float32)
+        self.segment = -1
+
+    def __call__(self, observations):
+        import torch
+        from tensordict import TensorDict
+
+        obs = observations["policy"]
+        if tuple(obs.shape) != (1, 57) or not torch.isfinite(obs).all():
+            raise ValueError("Policy requires finite observations with shape [1, 57]")
+        with torch.inference_mode():
+            action = self.actor(TensorDict({"policy": obs.to(self.device)}, batch_size=[1]), stochastic_output=False)
+            if self.clip_actions is not None:
+                action = action.clamp(-self.clip_actions, self.clip_actions)
+            if not torch.isfinite(action).all():
+                raise FloatingPointError("Checkpoint actor returned nonfinite actions")
+        self.target = action[0].cpu().numpy().astype(np.float32, copy=True)
+        return self.target.copy()
+
+
+def set_command(raw, command):
+    """Publish this step's fixed command before constructing actor observations."""
+    import torch
+
+    term = raw.command_manager.get_term("base_velocity")
+    term.vel_command_b[:] = torch.as_tensor(command, device=term.vel_command_b.device)
+    term.is_standing_env.fill_(not any(command))
+    term.is_heading_env.zero_()

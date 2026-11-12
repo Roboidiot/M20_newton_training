@@ -3,94 +3,59 @@
     "task": "M20NewtonTraining-M20-M20-WalkOnSandProxy",
     "physics": "newton_mjwarp",
     "num_envs": 2048,
-    "max_iterations": 3000,
+    "max_iterations": 2000,
     "seed": 42,
     "logger": "tensorboard",
     "viz": "none",
-    "checkpoint": null,
+    "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk/2026-11-12_14-59-10/model_700.pt",
     "resume_optimizer_state": false,
     "reward_weights": {},
     "overrides": {}
   },
   "runs": [
     {
-      "name": "g2_12500",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/2026-11-07_21-23-23_198a52_02_group_02/model_12500.pt",
+      "name": "proxy_baseline"
+    },
+    {
+      "name": "proxy_no_orientation",
       "reward_weights": {
-        "track_lin_vel_xy_exp": 5.0,
-        "feet_forward_step": 100.0
+        "flat_orientation_l2": 0.0
       }
     },
     {
-      "name": "g2_height062",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/height0.62deg15/model_11000.pt",
+      "name": "proxy_strong_orientation",
       "reward_weights": {
-        "track_lin_vel_xy_exp": 5.0,
-        "feet_forward_step": 100.0
+        "flat_orientation_l2": -50.0
       }
     },
     {
-      "name": "g2_scratch",
-      "checkpoint": null,
-      "reward_weights": {
-        "track_lin_vel_xy_exp": 5.0,
-        "feet_forward_step": 100.0
+      "name": "proxy_air_threshold_01",
+      "overrides": {
+        "env.rewards.feet_air_time.params.threshold": 0.1
       }
     },
     {
-      "name": "g4_12500",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/2026-11-07_21-23-23_198a52_04_group_04/model_12500.pt",
-      "reward_weights": {
-        "track_lin_vel_xy_exp": 10.0,
-        "feet_forward_step": 50.0
+      "name": "proxy_air_threshold_05",
+      "overrides": {
+        "env.rewards.feet_air_time.params.threshold": 0.5
       }
     },
     {
-      "name": "g4_height062",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/height0.62deg15/model_11000.pt",
+      "name": "proxy_no_forward_step",
       "reward_weights": {
-        "track_lin_vel_xy_exp": 10.0,
-        "feet_forward_step": 50.0
+        "feet_forward_step": 0.0
       }
     },
     {
-      "name": "g4_scratch",
-      "checkpoint": null,
+      "name": "proxy_strong_lift",
       "reward_weights": {
-        "track_lin_vel_xy_exp": 10.0,
-        "feet_forward_step": 50.0
+        "rotation_gait_status": 6.0
       }
     },
     {
-      "name": "g1_scratch",
-      "checkpoint": null,
+      "name": "proxy_strong_phase",
       "reward_weights": {
-        "track_lin_vel_xy_exp": 5.0,
-        "feet_forward_step": 50.0
-      }
-    },
-    {
-      "name": "g1_height062",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/height0.62deg15/model_11000.pt",
-      "reward_weights": {
-        "track_lin_vel_xy_exp": 5.0,
-        "feet_forward_step": 50.0
-      }
-    },
-    {
-      "name": "g5_scratch",
-      "checkpoint": null,
-      "reward_weights": {
-        "track_lin_vel_xy_exp": 10.0,
-        "feet_forward_step": 100.0
-      }
-    },
-    {
-      "name": "g5_height062",
-      "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/height0.62deg15/model_11000.pt",
-      "reward_weights": {
-        "track_lin_vel_xy_exp": 10.0,
-        "feet_forward_step": 100.0
+        "rotation_gait_symmetry": 30.0
       }
     }
   ]

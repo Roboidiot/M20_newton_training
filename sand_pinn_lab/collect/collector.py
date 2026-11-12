@@ -13,7 +13,7 @@ import numpy as np
 
 from .config import DATA_ROOT, environment_config
 from .geometry import read_wheel_geometry
-from .policy import SlowRandomPolicy
+from .policy import CheckpointPolicy, SlowRandomPolicy, set_command
 from .storage import ChunkWriter, save_json, save_npz
 from .surface import reference_surface
 
@@ -93,12 +93,16 @@ def run(args):
     if args.device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable. Run this command on the M20 Newton machine with its GPU accessible.")
     cfg = environment_config(args)
+    checkpoint_policy = (
+        CheckpointPolicy(args.checkpoint, args.agent_config, args.device) if args.checkpoint is not None else None
+    )
     physics_dt, control_dt = args.physics.physics_dt_s, args.physics.control_dt_s
     args.leg_joint_names = list(cfg.leg_joint_names)
     args.wheel_joint_names = list(cfg.wheel_joint_names)
     geometry = read_wheel_geometry(cfg.scene.robot.spawn.usd_path)
     stamp = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d_%H-%M-%S_%f")
-    output = (args.output_dir or DATA_ROOT / f"random_{stamp}").expanduser().resolve()
+    prefix = "random" if args.checkpoint is None else f"policy_{args.checkpoint.stem}"
+    output = (args.output_dir or DATA_ROOT / f"{prefix}_{stamp}").expanduser().resolve()
     output.mkdir(parents=True, exist_ok=False)
     save_json(output / "environment.json", json.loads(json.dumps(to_dict(cfg), default=str)))
     save_json(output / "physics.json", args.physics.to_dict())
@@ -139,6 +143,22 @@ def run(args):
         "force_scope": "Sand forces only; gravity, actuator torques and rigid-floor contacts are not included",
         "episodes": [],
     }
+    if checkpoint_policy is not None:
+        metadata["policy"] = {
+            "kind": "rsl_rl_checkpoint",
+            "checkpoint": str(args.checkpoint),
+            "checkpoint_sha256": hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
+            "agent_config": str(args.agent_config),
+            "agent_config_sha256": hashlib.sha256(args.agent_config.read_bytes()).hexdigest(),
+            "command_body": args.command,
+            "command_during_warmup": [0.0, 0.0, 0.0],
+            "inference": "deterministic actor mean; saved observation normalizer and action clipping; no PPO updates",
+            "random_target": "Executed checkpoint action; zeros during warmup (legacy field name)",
+            "random_segment": "-1 (not a random segment)",
+        }
+        metadata["randomization"] = (
+            "Fixed trained actor and body command; same initial bed; episode seed=seed+episode_id"
+        )
     started = time.monotonic()
     writer = None
     entry = None
@@ -198,7 +218,7 @@ def run(args):
                         recorder.begin_episode(
                             episode, writer, height, episode * (args.episode_seconds + args.settle) + args.settle
                         )
-                        policy = SlowRandomPolicy(
+                        policy = checkpoint_policy or SlowRandomPolicy(
                             args.seed + episode,
                             limit=args.action_limit,
                             hold=tuple(args.hold_seconds),
@@ -211,9 +231,18 @@ def run(args):
                             if stop["signal"] is not None:
                                 break
                             t = step * control_dt
-                            action = (
-                                np.zeros(16, dtype=np.float32) if t < args.warmup - 1e-9 else policy(t - args.warmup)
-                            )
+                            warming_up = t < args.warmup - 1e-9
+                            if checkpoint_policy is not None:
+                                set_command(raw, (0.0, 0.0, 0.0) if warming_up else args.command)
+                                if warming_up:
+                                    action = np.zeros(16, dtype=np.float32)
+                                    policy.target = action.copy()
+                                else:
+                                    # Refresh after teleport/command assignment; never feed stale obs_buf.
+                                    raw.obs_buf = raw.observation_manager.compute()
+                                    action = policy(raw.obs_buf)
+                            else:
+                                action = np.zeros(16, dtype=np.float32) if warming_up else policy(t - args.warmup)
                             recorder.action, recorder.target = action, policy.target.copy()
                             recorder.segment, recorder.control_step = policy.segment, step
                             previous_frame = recorder.frame

@@ -10,6 +10,7 @@ import torch
 from isaaclab.app import launch_simulation
 
 import M20_newton_training.tasks  # noqa: F401
+from M20_newton_training.sand_proxy.analytical.foot_model import DEFAULT_MODEL_PATH
 from M20_newton_training.tasks.m20.config.M20.walk_on_sand_proxy_env_cfg import (
     DeeproboticsM20WalkOnSandProxyEnvCfg,
     M20FootProxyPhysicsCfg,
@@ -28,12 +29,12 @@ def main():
     args = parser.parse_args()
     args.output = args.output or terrain_directory(args.terrain, args.model) / "validation/runtime_support.json"
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
-    if args.model:
-        cfg.actions.sand_proxy.model_path = str(args.model.resolve())
-    if args.physics_dt:
-        cfg.sim.dt = args.physics_dt
-        cfg.decimation = round(0.02 / args.physics_dt)
-        cfg.sim.render_interval = cfg.decimation
+    # This calibration tool validates the preserved analytical law, not the task's neural default.
+    cfg.actions.sand_proxy.model_kind = "analytical"
+    cfg.actions.sand_proxy.model_path = str((args.model or DEFAULT_MODEL_PATH).resolve())
+    cfg.sim.dt = args.physics_dt or 0.0005
+    cfg.decimation = round(0.02 / cfg.sim.dt)
+    cfg.sim.render_interval = cfg.decimation
     # Direct scripts must resolve presets before constructing SimulationContext.
     physics = cfg.sim.physics
     assert isinstance(physics, M20FootProxyPhysicsCfg)

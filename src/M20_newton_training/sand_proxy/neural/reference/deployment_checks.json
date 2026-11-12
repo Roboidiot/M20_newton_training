@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "device": "cpu",
+  "torch_version": "2.15.0+cpu",
+  "gpu_tested": false,
+  "isaaclab_closed_loop_tested": false,
+  "standalone_import_passed": true,
+  "runtime_unit_tests": 3,
+  "runtime_vs_saved_numpy_predictor": {
+    "random_heldout_test": {
+      "wheel_samples": 23988,
+      "max_force_component_difference_N": 0.00018310546875,
+      "max_torque_component_difference_Nm": 1.33514404296875e-05
+    },
+    "walking_policy_all": {
+      "wheel_samples": 79960,
+      "max_force_component_difference_N": 0.00018310546875,
+      "max_torque_component_difference_Nm": 1.52587890625e-05
+    }
+  }
+}

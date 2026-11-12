@@ -21,7 +21,7 @@ class DeeproboticsM20RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         hidden_dims=[512, 256, 128],
         activation="elu",
         obs_normalization=False,
-        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=2.0, std_type="log"),
+        distribution_cfg=RslRlMLPModelCfg.GaussianDistributionCfg(init_std=1.0, std_type="log"),
     )
     critic = RslRlMLPModelCfg(
         hidden_dims=[512, 256, 128],

@@ -58,7 +58,7 @@ from .rough_env_cfg import DeeproboticsM20RewardsCfg, DeeproboticsM20RoughEnvCfg
 # Sand bed geometry
 ##
 
-SAND_HALF_EXTENT_XY = 1.2
+SAND_HALF_EXTENT_XY = 0.8
 """Half side length of the square sand patch [m], measured to the inner face of the tray walls."""
 
 SAND_DEPTH = 0.30
@@ -120,12 +120,12 @@ def _grid_bound(value: float, lower: float) -> float:
     return float(np.nextafter(np.float32(lower + value), np.float32(lower)))
 
 
-def _sand_grid() -> MPMGridCfg:
+def _sand_grid(depth: float = SAND_DEPTH) -> MPMGridCfg:
     """Build the cell-centred particle lattice that fills the sand patch."""
     spacing = SAND_VOXEL_SIZE / SAND_PARTICLES_PER_CELL
     inset = SAND_HALF_EXTENT_XY - SAND_COLLIDER_MARGIN
     lower = (-inset, -inset, 0.0)
-    layers = max(1, math.floor(SAND_DEPTH / spacing + 1.0e-9))
+    layers = max(1, math.floor(depth / spacing + 1.0e-9))
     upper = (
         _grid_bound(2.0 * inset, -inset),
         _grid_bound(2.0 * inset, -inset),

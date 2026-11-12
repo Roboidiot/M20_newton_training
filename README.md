@@ -20,12 +20,28 @@ The M20 wheeled robot model lives in `deep_robotics_model/M20/` (USD, URDF, and 
 `DEEPROBOTICS_M20_CFG` articulation in `src/M20_newton_training/assets/deeprobotics.py`.
 
 `M20NewtonTraining-M20-M20-Walk` uses Flat's plane, 57-dimensional actor observation, 60-dimensional critic
-observation, 16 actions, command distribution, and PPO networks. It replaces the turn-only air-time reward
-with touchdown air-time credit (weight +10, reference 0.2 s, capped at 0.5 s). Commands above 0.1 m/s laterally
+observation, 16 actions and PPO networks. Training commands are forward-only: vx=0.25..0.4 m/s, vy=wz=0,
+without stationary samples. It replaces the turn-only air-time reward
+with touchdown air-time credit (weight +50, reference 0.5 s, no duration cap). Commands above 0.1 m/s laterally
 double this term, commands above 0.1 rad/s in yaw triple it, and combined side/turn commands quadruple it;
 zero commands disable the term. Shorter-than-reference air times give negative credit, amplified by the same
 factors. Actual wheel-speed mean square (wheel speeds in rad/s) is penalized at -0.2, multiplied by five for any turning
-command. Other reward weights match Flat. Walk sets a task-local reward gait level of 1 and disables the
+command; the current batch overrides this weight to -2.
+`rotation_gait_status` uses `ProxyRotationGaitStatus(reward_mode="rough", min_air_time=0)`:
+while one diagonal swings and the other supports, mean swing-foot height must exceed mean support-foot
+height by 20 cm. Every qualifying control step scores one, including a held pose (source weight +5).
+This retains exact opposing contact patterns and the all-motion command gate, without an air-time lower bound.
+`rotation_gait_symmetry` balances the two opposing diagonal states in a 4 s sliding window (current source weight +15),
+using `2*sqrt(p_A*p_B)`. It imposes no fixed cycle, order or minimum duration on phase occupancy.
+Both gait terms activate under straight commands with command norm >=0.1.
+The shared gait formulas read measured rigid `ContactSensor` forces directly, using upward Fz>5 N as support.
+Contact timers/events sample once per 50 Hz control step, shared across terms; no proxy force is computed or applied.
+Walk also enables `base_height_l2` with weight -10 and a 0.58 m world-Z target on the flat ground,
+without height-scanner adjustment. Its `flat_orientation_l2` weight is -10.
+Walk disables `ang_vel_xy_l2`, `lin_vel_z_l2`, `joint_mirror`,
+`joint_torques_l2`, `hipx_joint_pos_penalty`, `hipy_joint_pos_penalty`, `knee_joint_pos_penalty`,
+`action_rate_l2` and the `contact_forces` reward. The contact sensor remains active for gait judgment.
+Other reward weights match Flat. Walk sets a task-local reward gait level of 1 and disables the
 terrain/gait curricula, so the inherited gait-scaled rewards stay active without modifying sibling tasks.
 These rewards encourage stepping without imposing a clock or removing wheel actions; gait quality requires
 training and playback validation.
@@ -42,6 +58,11 @@ uv run tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk --port 6006
 initialization with WalkOnSandProxy through `config/M20/walk_sand_common_cfg.py`. Change shared
 training settings there; the original Walk, Rough and Sand tasks remain independent.
 
+For MPM training/play, select `physics=newton_sand`; `physics=newton_mjwarp` selects
+rigid-only physics and does not advance the particles. The MPM foot-impulse observer
+also requires `env.sim.physics.use_cuda_graph=False` (already the task default).
+WalkOnSandProxy instead uses `physics=newton_mjwarp` with the neural force action.
+
 `mdp/mpm_foot_contact.py` passively collects every MPM collider impulse belonging to each ordered
 wheel foot and environment. It sums the full 20 ms control window before converting to force:
 `F_world = sum(J_world) / 0.02`. Force conversion, support/air-time timers, touchdown events and
@@ -52,8 +73,8 @@ The observer adds zero action dimensions and never applies extra proxy forces.
 
 MPM physics remains 200 Hz (`dt=0.005`, decimation 4), with the rigid entry taking two substeps.
 This task uses eager stepping (`use_cuda_graph=False`) so the passive hook reads every actual MPM
-substep, including sparse-grid rebuilds. Proxy physics keeps its own 2 kHz force update path.
-The 2.4 m square, 0.30 m thick MPM beds are unchanged. The robot starts centered at z=0.88 m,
+substep, including sparse-grid rebuilds. Neural proxy forces update at 200 Hz; the preserved analytical model uses 2 kHz with its original timestep.
+The MPM walking beds are 2.4 m square and 0.20 m thick above the rigid floor. The robot starts centered at z=0.73 m,
 with roll/pitch reset ranges +/-0.02 rad. Current commands enable only forward/backward motion,
 `abs(vx)=0.15..0.5 m/s`, `vy=wz=0`; play keeps the shared Walk keyboard behavior.
 
@@ -65,11 +86,18 @@ uv run isaaclab train --rl_library rsl_rl --task M20NewtonTraining-M20-M20-WalkO
 uv run tensorboard --logdir logs/rsl_rl/deeprobotics_m20_walk_on_sand --port 6006
 ```
 
-`M20NewtonTraining-M20-M20-WalkOnSandProxy` replaces the particle bed with calibrated external forces
+`M20NewtonTraining-M20-M20-WalkOnSandProxy` now defaults to the frozen neural wheel-wrench model
+copied from `sand_pinn_lab/model`, with fixed reference/local sand surfaces at environment origin +0.20 m.
+Runtime weights live in `src/M20_newton_training/sand_proxy/neural/best.pt`; the preserved analytical model
+lives in `sand_proxy/analytical/`. See [model layout, feature/torque conventions and backend switching](src/M20_newton_training/sand_proxy/README.md).
+Actor/critic/action dimensions remain unchanged. The following analytical calibration notes remain available
+for the explicitly selected analytical backend.
+
+The proxy task replaces the particle bed with predicted external forces
 on the four M20 wheel feet. It keeps Walk's 57/60 observation dimensions, 16 actions and PPO networks;
 no shin, thigh or belly forces are applied. The deployed parameters are in
-`src/M20_newton_training/sand_proxy/calibrated/m20_foot_sand.json`. The original MPM tasks remain available.
-This task uses plain `newton_mjwarp`, with a virtual sand surface at z=0.30 m and a non-colliding surface
+`src/M20_newton_training/sand_proxy/analytical/calibrated/m20_foot_sand.json`. The original MPM tasks remain available.
+This task uses plain `newton_mjwarp`, with a virtual sand surface at z=0.20 m and a non-colliding surface
 visual. There are no particles to render. Each environment independently resamples every 10 s,
 choosing uniformly among axes with a nonzero configured range. A range of `(0, 0)` disables
 that axis; all-zero ranges produce stationary commands. Enabled axes share `min_abs_command=0.15`,
@@ -77,20 +105,18 @@ including the boundary. The extraction/stepping stage currently enables forward 
 `vx` is in `[0.15,0.25]` m/s, with `vy=wz=0`. To restore backward/lateral/turn sampling, give those axes nonzero ranges
 that reach the minimum magnitude. `SingleAxisVelocityCommand` in `mdp/single_axis_velocity.py`
 bypasses the shared sampler's <=0.2 m/s zeroing rule. Heading/standing overrides are disabled.
-Foot forces update at 2 kHz; the policy
+Neural wrenches/history update at 200 Hz (0.005 s), analytical forces use 2 kHz when selected with the original timestep; the policy
 and all rewards remain at 50 Hz. The task owns physics decimation so Newton cannot fold these
 state-dependent forces into one policy-step update.
 
-The two existing velocity slots use body-frame component
-ratios `-(cmd-v)/cmd+1 = v/cmd`: `command_direction_lin_vel_xy` averages the ratios of active XY
-command components; `command_direction_ang_vel_z` uses body-Z angular velocity divided by the turn
-command. Matching positive or negative nonzero commands score one. Their weights remain +5/+2.
-Zero command components are excluded (abs(cmd)<=1e-6); no active component gives zero.
-No yaw angle, attitude projection or world velocity is used for the linear reward.
-There is no sign extraction, exponential kernel or `std`. Both rewards peak at a velocity ratio
-of 1.0 (`max_reward`): it equals q below that point and 2-q above it, with no lower bound.
-The original exponential functions remain available; Walk/Rough bindings are unchanged and MPM now shares these bindings.
-The existing `_exp` slot/log names are retained for compatibility. Both sand-walking tasks share the reward definitions.
+Both sand-walking tasks restore body-frame exponential tracking:
+`r_lin = exp(-((vx_cmd-vx)^2 + (vy_cmd-vy)^2) / 0.25)`, with `std=0.5` and weight +5.
+Zero command components remain in the error, so unwanted lateral motion is penalized during straight commands.
+The angular slot also binds `track_ang_vel_z_exp` with `std=0.5`, but remains disabled by the shared
+zero-weight settings. If enabled, its raw score is `exp(-(wz_cmd-wz)^2 / 0.25)`.
+Raw scores lie in [0,1] and peak when actual velocity equals the command; RewardManager applies weight and dt.
+The previous linear ratio functions remain available in `mdp/rewards.py` for experiments.
+Walk/Rough retain their existing exponential tracking configurations. Batch Proxy runs inherit these shared defaults.
 Air-time, crawl lift, forward touchdown and crawl phase weights are
 +5/+200/+5/+2.5 respectively. HipX posture/mirroring weights are -0.25/-0.5 and the straight-command
 wheel-speed cost is -10.0. `feet_lift_consistency` is disabled; its implementation remains available. The `rotation_gait_status`/`rotation_gait_symmetry`
@@ -113,32 +139,34 @@ world-space progress, uses neither the base origin nor force-weighted pressure c
 support-polygon/ZMP stability guarantee. Parameters live in `SandWalkRewardsCfg.com_forward_l2` and can
 also be changed with the batch trainer. Walk/Rough, observations/actions and sand-force physics are unchanged.
 
-Support means applied upward world-Z proxy force >5 N. Air/contact timers and touchdown events
-sample the last physical force once per 20 ms policy step; horizontal drag and downward pull-out
-forces do not count as support. The first landing after reset is ignored. Air-time credit on
+Proxy support means world-Z `(applied proxy force + measured rigid floor reaction) >5 N`.
+The `foot_ground_contacts` sensor filters the four wheel bodies against `/World/ground` shapes,
+excluding self contacts. Air/contact timers and touchdown events sample once per 20 ms policy step,
+after physics, using the last applied proxy force and the current floor reaction. The floor reaction
+is not applied again as an external wrench. The first landing after reset is ignored. Air-time credit on
 subsequent touchdowns is `min(unloaded_time,1.0)-0.1`; short air times receive a negative score.
 Air time itself does not check whether the foot has left the sand surface.
 
-`rotation_gait_status` now uses `ProxyCrawlGaitStatus`: exactly three feet must
-support and the remaining foot must unload for at least `min_air_time=0.1` s. Reward only new maximum progress of that foot,
-`clip((z_foot_world-z_foot_world_last_support)/0.30,0,1)`, up to one raw unit per swing.
+`rotation_gait_status` now uses `ProxyRotationGaitStatus`: FL+HR swing while FR+HL support, or vice versa.
+Both swing feet must satisfy `min_air_time` (default 0.5 s; batch overrides remain per run).
+Each foot's normalized lift is `clip((z_foot_world-z_foot_world_last_support)/0.20,0,1)`;
+the pair earns only new progress of the smaller value, at most one raw unit per paired swing.
 As of 2026-11-07, both lift and forward-step rewards use the calibrated foot-bottom application point
 in world coordinates; neither subtracts chassis nor HipX positions. Each foot's supported world Z is
-updated until unloading and then frozen as its reference. The 30 cm target is a change in world height;
+updated until unloading and then frozen as its reference. The 20 cm target is a change in world height;
 a foot still below the sand surface can earn progress. Initial
 unobserved support, hovering, and revisiting an already credited height earn zero.
 Chassis or HipX motion with a fixed world-space foot earns no lift. Upward whole-robot translation can
-contribute if the foot satisfies the three-support/one-unloaded gate.
-The four main crawl terms have been restored to the versions before the finite-lead rotation experiment:
+contribute if the feet satisfy the opposing-diagonal contact gate.
+Current gait terms are:
 
-- `rotation_gait_status` uses `ProxyCrawlGaitStatus` with its original inverse repeat discount
-  (`repeat_decay=1`), not the finite `max_progress_lead` limit. The world-Z 30 cm lift target
-  and 0.1 s continuous-unloading gate remain.
+- `rotation_gait_status` uses `ProxyRotationGaitStatus` with the world-Z 20 cm target and
+  a continuous-unloading gate for both diagonal swing feet. There is no per-foot rotation discount.
 - `feet_air_time` uses the stateless `proxy_feet_air_time_command_scaled`: on touchdown, score
-  `min(T,1)-0.1`, retaining the short-air penalty and command multipliers, without foot balancing.
-- `rotation_gait_symmetry` uses `ProxyCrawlGaitSymmetry`: within a 2 s window, the occupancy of
-  each three-support/one-swing contact state is p_i; raw score is `4*(prod(p_i))**0.25`.
-  It no longer counts qualified completed swings or imposes the experimental 3 cm lift gate.
+  `min(T,1)-threshold`, retaining the short-air penalty and command multipliers, without foot balancing.
+- `rotation_gait_symmetry` uses `ProxyRotationGaitSymmetry`: within a 4 s window, the two opposing
+  diagonal states have occupancies p_A/p_B; raw score is `2*sqrt(p_A*p_B)`.
+  Three-support/one-swing, same-side/front-pair support, all-support and full flight receive no phase credit.
 - `feet_forward_step` uses `ProxyFootForwardStepReward`: compare the foot's world-XY positions
   at consecutive touchdowns, project onto the current planar command rotated to world XY using chassis yaw, and score
   `clip(world_advance/target_stride,0,1)`. Foot motion carried by the chassis counts; chassis motion with
@@ -159,29 +187,26 @@ it is currently disabled in the batch JSON. Per-foot lift and forward diagnostic
 the original count/progress logs.
 
 Foot-force diagnostics log only `Metrics/foot_forces/{fl,fr,hl,hr}_fz_mean`, in newtons.
-They use the same 50 Hz world-Z force samples as contact timing: the last applied
-proxy force of each control interval, or MPM whole-window impulse / 0.02 s.
+They use 50 Hz world-Z force samples: the last applied proxy force of each control interval,
+or MPM whole-window impulse / 0.02 s. Proxy force metrics exclude the rigid floor reaction,
+even though Proxy contact timing includes it.
 Signed means include airborne zeros and negative pull-out forces. At reset, each scalar
 averages the resetting worlds' own episode time means. TensorBoard further aggregates
 these scalars per PPO iteration; this is not a raw single-environment 50 Hz force trace.
 These metrics do not affect rewards or observations.
 
-Both sand-walking tasks additionally terminate on `base_height_low` when the base-link
-origin's world Z minus environment-origin Z reaches 0.65 m, and on `front_wheels_low`
-when mean rear-wheel link-origin Z exceeds mean front-wheel Z by at least 0.10 m.
-These are failures, not timeouts; the wheel check includes swing feet and uses ordered
-FL/FR/HL/HR wheel centers. `base_height_reset_penalty` and `front_wheels_reset_penalty`
-each have weight -100 and read only their matching termination flag. At 50 Hz each
-trigger contributes -2 after RewardManager's dt scaling; simultaneous failures contribute
--4 from these two terms. Existing reward/termination terms remain separate.
+Both sand-walking tasks disable `base_height_low` and `front_wheels_low`, and set
+`base_height_reset_penalty` and `front_wheels_reset_penalty` to zero.
+The continuous `base_height_l2` cost and `front_wheels_height` reward remain enabled.
 
 Body stability, action rate (-0.01) and wheel-speed costs are enabled; leg torque/acceleration are disabled.
 `contact_forces`, HipY/Knee posture costs, wheel acceleration, second-order action smoothing,
 sliding, `joint_mirror`, `stand_still`, non-foot undesired contacts, `sand_diagonal_steps` and
-`sand_step_completion` remain disabled. No ContactSensor or force observations are added.
-Walk and Rough configurations are unchanged. Both sand-walking tasks start at z=0.88 m,
-0.58 m above the virtual surface. The optional proxy-depth termination remains disabled;
-the force model retains its existing fitted-depth clamping marker of 0.28 m.
+`sand_step_completion` remain disabled. Proxy adds a filtered floor ContactSensor for gait judgment;
+no force observations are added. MPM retains its passive impulse observer.
+Walk and Rough configurations are unchanged. Both sand-walking tasks start at z=0.73 m,
+0.53 m above the virtual surface. The optional proxy-depth termination remains disabled;
+the preserved analytical model retains its fitted-depth clamping marker of 0.28 m; the neural model has no calibrated depth limit.
 Existing checkpoints keep the same 57/60 observations, 16 actions and PPO network architecture.
 New weights affect policy learning only after training continues.
 

@@ -6,14 +6,15 @@
 from typing import cast
 
 from isaaclab.physics import PhysicsCfg
-from isaaclab.utils import configclass
+from isaaclab.utils import configclass, replace
 
 from M20_newton_training.tasks.m20.mdp.mpm_foot_contact import MPMFootContactActionCfg
 
 from .rough_env_cfg import DeeproboticsM20ActionsCfg
-from .sand_env_cfg import SAND_ENV_SPACING, SAND_NUM_ENVS, DeeproboticsM20SandSceneCfg, M20SandPhysicsCfg
+from .sand_env_cfg import SAND_ENV_SPACING, SAND_NUM_ENVS, DeeproboticsM20SandSceneCfg, M20SandPhysicsCfg, _sand_grid
 from .walk_env_cfg import DeeproboticsM20WalkEnvCfg
 from .walk_sand_common_cfg import (
+    SAND_WALK_SURFACE_HEIGHT,
     DeeproboticsM20WalkOnSandRewardsCfg,  # noqa: F401 - preserve the old import path
     SandWalkRewardsCfg,
     SandWalkTerminationsCfg,
@@ -27,10 +28,17 @@ class MPMFootContactActionsCfg(DeeproboticsM20ActionsCfg):
 
 
 @configclass
+class SandWalkSceneCfg(DeeproboticsM20SandSceneCfg):
+    """Use the shared walking surface while retaining the original Sand experiment's bed."""
+
+    sand = replace(DeeproboticsM20SandSceneCfg().sand, spawn=_sand_grid(depth=SAND_WALK_SURFACE_HEIGHT))
+
+
+@configclass
 class DeeproboticsM20WalkOnSandEnvCfg(DeeproboticsM20WalkEnvCfg):
     """Walk's 57/60 observations and 16 actions, with MPM impulse-based foot contacts."""
 
-    scene: DeeproboticsM20SandSceneCfg = DeeproboticsM20SandSceneCfg(
+    scene: SandWalkSceneCfg = SandWalkSceneCfg(
         num_envs=SAND_NUM_ENVS, env_spacing=SAND_ENV_SPACING
     )
     actions: MPMFootContactActionsCfg = MPMFootContactActionsCfg()

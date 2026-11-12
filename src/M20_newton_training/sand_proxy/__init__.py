@@ -1,1 +1,1 @@
-"""Calibrated foot-only sand contact, independent of the MPM collection tools."""
+"""Neural and preserved analytical foot-sand models, independent of the offline laboratories."""

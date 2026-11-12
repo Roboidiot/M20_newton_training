@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "model_type": "m20_neural_wheel_wrench",
+  "source": "sand_pinn_lab/model",
+  "checkpoint_sha256": "9f118252adb4b80de06cf9e3f6ec941b51fccfc6d4a4e40e73676ddb68dfef28",
+  "runtime_sha256": "cd6927e9062fbdfcc5693b8827081865a8eb17baf90f14a93588173990c6acc3",
+  "physics_dt_s": 0.005,
+  "fixed_surface_height_m": 0.2,
+  "geometry": {
+    "type": "capsule",
+    "wheels": [
+      {
+        "body_name": "fl_wheel",
+        "prim_path": "/M20/fl_wheel/collisions/mesh_0/capsule",
+        "local_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_axis": [
+          0.0,
+          -0.9999999999999993,
+          -3.422854133461328e-08
+        ],
+        "radius": 0.09000000357627869,
+        "half_length": 0.027000000700354573
+      },
+      {
+        "body_name": "fr_wheel",
+        "prim_path": "/M20/fr_wheel/collisions/mesh_0/capsule",
+        "local_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_axis": [
+          0.0,
+          -0.9999999999999993,
+          -3.422854133461328e-08
+        ],
+        "radius": 0.09000000357627869,
+        "half_length": 0.027000000700354573
+      },
+      {
+        "body_name": "hl_wheel",
+        "prim_path": "/M20/hl_wheel/collisions/mesh_0/capsule",
+        "local_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_axis": [
+          0.0,
+          -0.9999999999999993,
+          -3.422854133461328e-08
+        ],
+        "radius": 0.09000000357627869,
+        "half_length": 0.027000000700354573
+      },
+      {
+        "body_name": "hr_wheel",
+        "prim_path": "/M20/hr_wheel/collisions/mesh_0/capsule",
+        "local_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "local_axis": [
+          0.0,
+          -0.9999999999999993,
+          -3.422854133461328e-08
+        ],
+        "radius": 0.09000000357627869,
+        "half_length": 0.027000000700354573
+      }
+    ]
+  },
+  "reference_com_body_m": [
+    [
+      -3.113984519131918e-07,
+      0.00027900151326321065,
+      5.703292345060618e-07
+    ],
+    [
+      -6.473268854279013e-07,
+      -0.0002790124563034624,
+      -4.6242046636280065e-08
+    ],
+    [
+      -6.078893761696236e-07,
+      0.00027900910936295986,
+      2.1048987264293828e-07
+    ],
+    [
+      6.097462801335496e-07,
+      -0.00027900884742848575,
+      2.0131376743393048e-07
+    ]
+  ],
+  "reference_com_source": "reference/body_properties.npz; wheel rows selected by reference/metadata.json mapping",
+  "surface_features": "reference_depth = local_depth = fixed_surface_height - capsule_bottom_z; surface_valid=1",
+  "first_history_frame": "zero_wrench",
+  "outside_sand": "zero_wrench when depth <= 0",
+  "force_frame": "world XYZ, Z up",
+  "torque_reference": "fixed reference wheel COM transformed by current link pose"
+}
