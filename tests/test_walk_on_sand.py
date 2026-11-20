@@ -1,8 +1,9 @@
-"""Walk checkpoint compatibility, shared sand-walking configuration and retained legacy rewards."""
+"""Sand observation interfaces, shared training configuration and retained legacy rewards."""
 
 from types import SimpleNamespace
 
 import gymnasium as gym
+import numpy as np
 import pytest
 import torch
 from rsl_rl.models import MLPModel
@@ -10,6 +11,7 @@ from rsl_rl.utils import resolve_class
 from tensordict import TensorDict
 
 from isaaclab.utils import to_dict
+from isaaclab_newton.sim.spawners.mpm.mpm import _grid_parameters
 
 from isaaclab_rl.rsl_rl.utils import check_rsl_rl_version, handle_deprecated_rsl_rl_cfg
 
@@ -38,7 +40,12 @@ def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_
     assert before_walk == to_dict(walk)
     assert before_sand == to_dict(sand)
     assert before_proxy == to_dict(proxy)
-    assert to_dict(cfg.observations) == to_dict(walk.observations)
+    observations = to_dict(cfg.observations)
+    for term in observations["critic"].values():
+        if isinstance(term, dict) and term.get("params", {}).get("action_term_name") == "mpm_contact":
+            term["params"]["action_term_name"] = "sand_proxy"
+    assert observations == to_dict(proxy.observations)
+    assert walk.observations.policy.base_lin_vel is None
     assert to_dict(cfg.actions.joint_pos) == to_dict(walk.actions.joint_pos)
     assert to_dict(cfg.actions.joint_vel) == to_dict(walk.actions.joint_vel)
     assert not hasattr(cfg.actions, "sand_proxy")
@@ -55,27 +62,28 @@ def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_
     for name in ("sand_tray_floor", "sand_tray_north", "sand_tray_south", "sand_tray_east", "sand_tray_west"):
         assert to_dict(getattr(cfg.scene, name)) == to_dict(getattr(sand.scene, name))
     assert cfg.scene.sand.spawn.lower[2] == 0.0
-    assert cfg.scene.sand.spawn.upper[2] == pytest.approx(0.20)
+    assert cfg.scene.sand.spawn.upper[2] == pytest.approx(0.15)
     assert sand.scene.sand.spawn.upper[2] == pytest.approx(0.30)
     assert cfg.scene.env_spacing == sand.scene.env_spacing
     assert to_dict(cfg.scene.robot.init_state) == to_dict(proxy.scene.robot.init_state)
-    assert cfg.scene.robot.init_state.pos[2] == pytest.approx(0.73)
-    assert proxy.actions.sand_proxy.surface_height == 0.20
-    assert proxy.scene.sand_surface_visual.init_state.pos[2] == pytest.approx(0.198)
-    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.20
+    assert cfg.scene.robot.init_state.pos[2] == pytest.approx(0.68)
+    assert proxy.actions.sand_proxy.surface_height == 0.15
+    assert proxy.scene.sand_surface_visual.init_state.pos[2] == pytest.approx(0.148)
     assert cfg.rewards.track_lin_vel_xy_exp.func is shared_rewards.track_lin_vel_xy_exp
     assert cfg.rewards.track_lin_vel_xy_exp.params == {"command_name": "base_velocity", "std": 0.5}
     assert cfg.rewards.track_lin_vel_xy_exp.weight == 5.0
-    assert cfg.rewards.track_ang_vel_z_exp is None
     assert cfg.terminations.base_height_low is None
     assert cfg.rewards.base_height_reset_penalty is None
     assert cfg.rewards.front_wheels_reset_penalty is None
     assert to_dict(cfg.events) == to_dict(proxy.events)
+    assert cfg.events.randomize_reset_joints.params["position_range"] == (1.0, 1.0)
+    assert cfg.events.randomize_reset_joints.params["velocity_range"] == (0.0, 0.0)
     assert cfg.scene.height_scanner is None
     assert to_dict(cfg.scene.height_scanner_base) == to_dict(walk.scene.height_scanner_base)
     assert cfg.scene.contact_forces is None
     assert cfg.sim.dt * cfg.decimation == proxy.sim.dt * proxy.decimation == 0.02
-    assert cfg.actions.mpm_contact.contact_force_threshold == proxy.actions.sand_proxy.contact_force_threshold == 5.0
+    assert cfg.actions.mpm_contact.contact_force_threshold == 5.0
+    assert proxy.actions.sand_proxy.contact_force_threshold == 20.0
     assert cfg.reward_gait_level == 1.0
     assert cfg.curriculum.terrain_levels is None
     assert cfg.curriculum.gait_level is None
@@ -91,7 +99,19 @@ def test_walk_on_sand_matches_proxy_rewards_commands_and_initialization_without_
             assert sensor is None or sensor.name != "contact_forces"
 
 
-def test_walk_on_sand_runner_changes_only_experiment_name_and_loads_walk_networks_strictly():
+def test_mpm_lattice_represents_full_15cm_layer_without_truncating_to_14cm():
+    grid = DeeproboticsM20WalkOnSandEnvCfg().scene.sand.spawn
+    first, dimensions, cell_size, mass, radius, _ = _grid_parameters(grid)
+    assert dimensions[2] == 8
+    assert cell_size[2] * dimensions[2] == pytest.approx(.15)
+    assert first[2] - .5 * cell_size[2] == pytest.approx(0.)
+    assert first[2] + (dimensions[2] - .5) * cell_size[2] == pytest.approx(.15)
+    volume = np.prod(np.asarray(grid.upper) - np.asarray(grid.lower))
+    assert mass * np.prod(dimensions) == pytest.approx(volume * grid.material.density)
+    assert (2 * radius) ** 3 == pytest.approx(np.prod(cell_size))
+
+
+def test_walk_on_sand_retains_hidden_networks_with_fresh_expanded_inputs():
     cfg = DeeproboticsM20WalkOnSandPPORunnerCfg()
     walk_cfg = DeeproboticsM20WalkPPORunnerCfg()
     actual = to_dict(cfg)
@@ -104,19 +124,22 @@ def test_walk_on_sand_runner_changes_only_experiment_name_and_loads_walk_network
     # Match the training entrypoint's compatibility conversion before constructing RSL-RL models.
     handle_deprecated_rsl_rl_cfg(cfg, check_rsl_rl_version())
     handle_deprecated_rsl_rl_cfg(walk_cfg, check_rsl_rl_version())
-    obs = TensorDict({"policy": torch.zeros(2, 57), "critic": torch.zeros(2, 60)}, batch_size=[2])
+    old_obs = TensorDict({"policy": torch.zeros(2, 57), "critic": torch.zeros(2, 60)}, batch_size=[2])
+    obs = TensorDict({"policy": torch.randn(2, 60), "critic": torch.randn(2, 70)}, batch_size=[2])
     for name, output_dim in (("actor", 16), ("critic", 1)):
         model_class, params = resolve_class(to_dict(getattr(cfg, name)))
         source_class, source_params = resolve_class(to_dict(getattr(walk_cfg, name)))
         assert model_class is source_class is MLPModel
-        source = source_class(obs, walk_cfg.obs_groups, name, output_dim, **source_params)
+        source = source_class(old_obs, walk_cfg.obs_groups, name, output_dim, **source_params)
         target = model_class(obs, cfg.obs_groups, name, output_dim, **params)
-        target.load_state_dict(source.state_dict(), strict=True)
-        with torch.inference_mode():
-            expected = source(obs, stochastic_output=False)
-            actual_output = target(obs, stochastic_output=False)
+        with pytest.raises(RuntimeError, match="size mismatch"):
+            target.load_state_dict(source.state_dict(), strict=True)
+        # Train a freshly initialized model: expanded inputs propagate finite gradients.
+        target = model_class(obs, cfg.obs_groups, name, output_dim, **params)
+        actual_output = target(obs, stochastic_output=False)
         assert actual_output.shape == (2, output_dim)
-        torch.testing.assert_close(actual_output, expected)
+        actual_output.square().mean().backward()
+        assert all(p.grad is None or torch.isfinite(p.grad).all() for p in target.parameters())
 
 
 def _env():
@@ -188,7 +211,7 @@ def test_completed_strokes_scale_commands_and_clear_pending_credit_on_partial_re
     assert not reward(env, **params).any()
 
 
-def test_play_preserves_walk_observation_interface_and_coupled_physics():
+def test_play_preserves_expanded_sand_observations_and_coupled_physics():
     cfg = DeeproboticsM20WalkOnSandEnvCfg()
     walk = DeeproboticsM20WalkEnvCfg()
     proxy = DeeproboticsM20WalkOnSandProxyEnvCfg()
@@ -196,7 +219,12 @@ def test_play_preserves_walk_observation_interface_and_coupled_physics():
     cfg.play_mode()
     walk.play_mode()
     proxy.play_mode()
-    assert to_dict(cfg.observations) == to_dict(walk.observations)
+    assert to_dict(cfg.observations.policy) == to_dict(proxy.observations.policy)
+    assert cfg.observations.policy.base_lin_vel is not None
+    assert walk.observations.policy.base_lin_vel is None
+    assert cfg.observations.critic.feet_sand_contact.params["action_term_name"] == "mpm_contact"
+    assert not cfg.observations.policy.enable_corruption
+    assert not cfg.observations.critic.enable_corruption
     assert to_dict(cfg.commands) == to_dict(proxy.commands)
     assert to_dict(cfg.sim.physics) == physics
     assert cfg.scene.contact_forces is None

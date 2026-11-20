@@ -232,6 +232,228 @@ def _support(env, feet):
     env.term.contact_state.update(force, dt=env.step_dt, threshold=env.term.cfg.contact_force_threshold)
 
 
+@pytest.mark.parametrize("swing,support", [([0, 3], [1, 2]), ([1, 2], [0, 3])])
+def test_current_height_lift_tracks_rising_falling_and_held_height_without_peak_credit(swing, support):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    target = .0625  # Binary-exact target for the inclusive upper boundary.
+    cfg.params.update(reward_mode="current_height", target_height=target, min_air_time=0.0)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    anchor = torch.tensor([-0.20, -0.08, -0.13, -0.15])
+    height[:] = anchor
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+    _support(env, support)
+    # Each swing foot uses its own support reference, even below the nominal sand plane.
+    for delta, expected in (
+        (0.0, 0.0),
+        (target * .2, 0.2),
+        (target * .5, 0.5),
+        (target, 1.0),
+        (target * 2, 0.0),
+        (target * .5, 0.5),
+        (target * .5, 0.5),
+        (-0.01, 0.0),
+    ):
+        height[:] = anchor
+        height[:, swing] += delta
+        torch.testing.assert_close(
+            reward(env, **cfg.params), torch.full((env.num_envs,), expected), atol=1e-6, rtol=1e-6
+        )
+    # A historical maximum cannot keep the instantaneous score high or consume future credit.
+    reward.peak_progress.fill_(1.0)
+    height[:] = anchor
+    height[:, swing] += target * .2
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.full((env.num_envs,), 0.2), atol=1e-6, rtol=1e-6
+    )
+    # Motion of the opposite support pair must not change the swing pair's measured lift.
+    height[:, support] += 0.5
+    torch.testing.assert_close(
+        reward(env, **cfg.params), torch.full((env.num_envs,), 0.2), atol=1e-6, rtol=1e-6
+    )
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+    _support(env, support)
+    env.commands.zero_()
+    assert not reward(env, **cfg.params).any()
+
+
+@pytest.mark.parametrize("front,rear,support", [(0, 3, [1, 2]), (1, 2, [0, 3])])
+@pytest.mark.parametrize("reverse_groups", [False, True])
+def test_current_height_lift_front_bias_compares_own_lifts_and_resolves_both_diagonals(
+    front, rear, support, reverse_groups,
+):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="current_height", target_height=.125, front_height_bias=.5)
+    if reverse_groups:
+        cfg.params["group_a_body_names"].reverse()
+        cfg.params["group_b_body_names"].reverse()
+    reward = ProxyRotationGaitStatus(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    # Front and rear references differ: the bonus must use lift, not absolute Z.
+    anchor = torch.tensor([-.50, -.375, -.25, -.125])
+    height[:] = anchor
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+    _support(env, support)
+    height[:, front] += torch.tensor([.09375, .0625, .03125, .25, -.125])
+    height[:, rear] += torch.tensor([.03125, .0625, .09375, -.125, .25])
+    expected = torch.tensor([.625, .5, .375, .75, .25])
+    torch.testing.assert_close(reward(env, **cfg.params), expected)
+    # No peak-held score; opposite support-foot sinking cannot alter own lift.
+    height[:, support] -= .5
+    torch.testing.assert_close(reward(env, **cfg.params), expected)
+    cfg.params["front_height_bias"] = 0.
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), .5))
+
+
+@pytest.mark.parametrize("front,rear,support", [(0, 3, [1, 2]), (1, 2, [0, 3])])
+def test_current_height_lift_front_bias_preserves_upper_limit_and_gates(front, rear, support):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="current_height", target_height=.125, min_air_time=.1, front_height_bias=.5)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _support(env, support)
+    height[:, front] = torch.tensor([.1875, .187501, 0., .09375, .09375])
+    height[:, rear] = torch.tensor([.0625, .062501, 0., .03125, .03125])
+    assert not reward(env, **cfg.params).any()  # Insufficient unloading time.
+    env.term.contact_state.current_air_time[:, [front, rear]] = .1
+    reward.support_seen[3, front] = False
+    env.commands[4].zero_()
+    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([1.5, 0., 0., 0., 0.]))
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+
+
+@pytest.mark.parametrize("bias", [-.1, 1.1, float("nan"), float("inf")])
+def test_current_height_lift_rejects_invalid_front_bias(bias):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="current_height", front_height_bias=bias)
+    with pytest.raises(ValueError, match="front_height_bias"):
+        ProxyRotationGaitStatus(cfg, env)
+
+
+def test_current_height_lift_requires_support_refreshes_on_landing_and_resets_per_environment():
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="current_height", target_height=0.10, min_air_time=0.0)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    height[:] = torch.tensor([-0.20, -0.15, -0.10, -0.05])
+    _support(env, [0, 3])
+    height[:, [1, 2]] += 0.5
+    assert not reward(env, **cfg.params).any()  # No initial airborne credit without support history.
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _support(env, [0, 3])
+    height[:, [1, 2]] += 0.05
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.5))
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()  # Landing replaces the old reference.
+    _support(env, [0, 3])
+    assert not reward(env, **cfg.params).any()
+    height[:, [1, 2]] += 0.01
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.1))
+    reward.reset([2])
+    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0.1, 0.1, 0.0, 0.1, 0.1]))
+    _support(env, [0, 1, 2, 3])
+    reward(env, **cfg.params)
+    _support(env, [0, 3])
+    height[:, [1, 2]] += 0.04
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), 0.4))
+
+
+@pytest.mark.parametrize("swing,support", [([0, 3], [1, 2]), ([1, 2], [0, 3])])
+def test_relative_height_lift_tracks_current_diagonal_gap_and_cancels_common_motion(swing, support):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="relative_height", target_height=0.10, min_air_time=0.0)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    height = env.term.application_points_w[..., 2]
+    _support(env, support)
+    # No stored landing/support reference is needed for this instantaneous comparison.
+    for gap, expected in ((-.02, 0.), (0., 0.), (.05, .5), (.10, 1.), (.20, 0.), (.02, .2), (.02, .2)):
+        height[:] = -.25
+        height[:, swing] += gap
+        torch.testing.assert_close(
+            reward(env, **cfg.params), torch.full((env.num_envs,), expected), atol=1e-6, rtol=1e-6
+        )
+    height += .25
+    reward.peak_progress.fill_(1.)
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), .2), atol=1e-6, rtol=1e-6)
+    # Moving the support pair changes the reference immediately, with the swing feet fixed.
+    height[:, support] -= .03
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), .5), atol=1e-6, rtol=1e-6)
+    height[:, support] += .06
+    assert not reward(env, **cfg.params).any()
+
+
+@pytest.mark.parametrize("swing,support", [([0, 3], [1, 2]), ([1, 2], [0, 3])])
+@pytest.mark.parametrize("reward_mode", ["relative_height", "current_height"])
+def test_bounded_height_lift_upper_limit_is_inclusive_and_recovers_after_overshoot(swing, support, reward_mode):
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    # A binary-exact target makes the inclusive boundary independent of rounding.
+    target = .125
+    cfg.params.update(reward_mode=reward_mode, target_height=target, min_air_time=0.0)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    _support(env, [0, 1, 2, 3])
+    assert not reward(env, **cfg.params).any()
+    _support(env, support)
+    height = env.term.application_points_w[..., 2]
+    height[:, swing] = torch.tensor([target - 1e-6, target, target + 1e-6, .25, -.01])[:, None]
+    expected = torch.tensor([(target - 1e-6) / target, 1., 0., 0., 0.])
+    torch.testing.assert_close(reward(env, **cfg.params), expected)
+    # Holding an excessive lift earns nothing; returning to range restores credit.
+    torch.testing.assert_close(reward(env, **cfg.params), expected)
+    height[:, swing] = target / 2
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), .5))
+
+
+def test_relative_height_lift_averages_each_diagonal_and_preserves_contact_command_and_time_gates():
+    env = _env()
+    cfg = env.cfg.rewards.rotation_gait_status
+    cfg.params.update(reward_mode="relative_height", target_height=.10, min_air_time=.1)
+    reward = ProxyRotationGaitStatus(cfg, env)
+    env.term.application_points_w[..., 2] = torch.tensor([-.20, -.11, -.19, -.20])
+    # FL+HR support at -0.20, FR+HL swing at mean -0.15: gap 5 cm.
+    _support(env, [0, 3])
+    assert not reward(env, **cfg.params).any()
+    env.term.contact_state.current_air_time[:, [1, 2]] = .1
+    torch.testing.assert_close(reward(env, **cfg.params), torch.full((env.num_envs,), .5))
+    env.commands[0] = 0.
+    env.commands[1] = torch.tensor([.099, 0., 0.])
+    env.commands[2] = torch.tensor([.1, 0., 0.])
+    torch.testing.assert_close(reward(env, **cfg.params), torch.tensor([0., 0., .5, .5, .5]))
+    for feet in ([0, 1], [0, 1, 2, 3], [], [0]):
+        _support(env, feet)
+        env.term.contact_state.current_air_time.fill_(.1)
+        assert not reward(env, **cfg.params).any()
+
+
+def test_sand_tasks_use_configured_lift_modes_while_rigid_walk_retains_binary_mode():
+    from M20_newton_training.tasks.m20.config.M20.walk_env_cfg import DeeproboticsM20WalkEnvCfg
+
+    for cls, mode in (
+        (DeeproboticsM20WalkOnSandProxyEnvCfg, "current_height"),
+        (DeeproboticsM20WalkOnSandEnvCfg, "current_height"),
+    ):
+        cfg = cls()
+        assert cfg.rewards.rotation_gait_status.params["reward_mode"] == mode
+        assert cfg.rewards.rotation_gait_status.params["target_height"] > 0.0
+        assert cfg.rewards.rotation_gait_status.params["min_air_time"] == 0.0
+        assert cfg.rewards.rotation_gait_status.params["front_height_bias"] == .5
+        assert cfg.rewards.rotation_gait_status.weight > 0.0
+    assert DeeproboticsM20WalkEnvCfg().rewards.rotation_gait_status.params["reward_mode"] == "rough"
+
+
 def test_rotation_lift_rewards_both_feet_relative_to_support_and_only_new_progress():
     env = _env()
     cfg = env.cfg.rewards.rotation_gait_status

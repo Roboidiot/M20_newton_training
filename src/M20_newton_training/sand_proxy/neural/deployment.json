@@ -5,7 +5,7 @@
   "checkpoint_sha256": "9f118252adb4b80de06cf9e3f6ec941b51fccfc6d4a4e40e73676ddb68dfef28",
   "runtime_sha256": "cd6927e9062fbdfcc5693b8827081865a8eb17baf90f14a93588173990c6acc3",
   "physics_dt_s": 0.005,
-  "fixed_surface_height_m": 0.2,
+  "fixed_surface_height_m": 0.15,
   "geometry": {
     "type": "capsule",
     "wheels": [

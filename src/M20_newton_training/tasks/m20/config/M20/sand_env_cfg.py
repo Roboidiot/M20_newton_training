@@ -58,7 +58,7 @@ from .rough_env_cfg import DeeproboticsM20RewardsCfg, DeeproboticsM20RoughEnvCfg
 # Sand bed geometry
 ##
 
-SAND_HALF_EXTENT_XY = 0.8
+SAND_HALF_EXTENT_XY = 1.5
 """Half side length of the square sand patch [m], measured to the inner face of the tray walls."""
 
 SAND_DEPTH = 0.30

@@ -23,14 +23,14 @@ sand_proxy/
 ## 固定沙面与深度
 
 共享高度定义在`tasks/m20/sand_walk_settings.py`的`SAND_WALK_SURFACE_HEIGHT`，
-由`walk_sand_common_cfg.py`绑定到奖励、加载高度和代理模型。每个环境沙面为 `env_origin_z + 0.20 m`，不随脚印、支撑、粒子或时间变化。
+由`walk_sand_common_cfg.py`绑定到奖励、加载高度和代理模型。每个环境沙面为 `env_origin_z + 0.15 m`，不随脚印、支撑、粒子或时间变化。
 原来的足底几何和深度定义保持不变：
 
 ```text
 c_world = wheel_link_position + R(link_quaternion) · capsule_local_center
 a_world = R(link_quaternion) · capsule_local_axis
 z_bottom = c_world.z − radius − half_length × abs(a_world.z)
-depth = env_origin_z + 0.20 − z_bottom
+depth = env_origin_z + 0.15 − z_bottom
 ```
 
 胶囊半径约0.09 m、半长约0.027 m。深度允许负值，不用轮中心高度代替足底。
@@ -38,9 +38,10 @@ depth = env_origin_z + 0.20 − z_bottom
 表示采用始终有效的固定平面；不把局部深度误填成零，也不估计沙面演化。
 `depth<=0` 时实际沙力和沙力矩均置零。网络没有旧模型的脚印坑或弹塑性内部状态。
 
-当前机器人初始高度为环境原点上方0.73m（沙面0.20m + 初始净空0.53m），比此前降低0.10m。
-机身高度重置及其重置惩罚已禁用。连续机身高度奖励的目标净空为0.40m，对应环境原点上方0.60m。
-MPM WalkOnSand的粒子层也从刚性底板0m生成到0.20m；原Sand任务和PINN采集仍保留0.30m沙床。
+当前机器人初始高度为环境原点上方0.68m（沙面0.15m + 初始净空0.53m），相比20cm床层降低5cm。
+机身高度重置及其重置惩罚已禁用。连续机身高度奖励也禁用，保留的目标净空参数为0.38m。
+MPM WalkOnSand的粒子层也从刚性底板0m生成到0.15m；原Sand任务和PINN采集仍保留0.30m沙床。
+Critic的沙层厚度输入与部署元数据`fixed_surface_height_m`同步为0.15m；神经网络权重保持现有版本。
 
 这按用户要求简化了训练时的局部沙面输入；原网络训练数据使用粒子估计沙面，两者不是完全相同的输入分布。
 
@@ -61,7 +62,20 @@ MPM WalkOnSand的粒子层也从刚性底板0m生成到0.20m；原Sand任务和P
 
 中心速度通过 `v_COM + omega × (center − COM)` 计算，不使用足底速度、速度目标或偏航局部坐标系速度。
 `wheel_model_runtime.py`内部完成对称变换、标准化、网络和输出还原；外部不再次处理。
-网络为冻结推理，参数不加入Actor/Critic优化器，策略观测57/60维和16维动作不变。
+代理力网络为冻结推理，参数不加入Actor/Critic优化器。
+当前沙地训练的Actor为60维、Critic为70维，16维动作和隐藏层配置不变。
+Actor新增机身坐标系线速度3维；Critic在原60维之后依次增加沙层厚度1维、
+四足有符号下陷深度4维、四足支撑状态4维、机身相对沙面高度1维。
+四足顺序为FL/FR/HL/HR，下陷深度为固定沙面高度减当前碰撞胶囊最低点高度，
+正值表示下陷，负值表示离开沙面；支撑判定为代理力与刚性地面力的合力Fz>20N。
+这些观测由`tasks/m20/mdp/sand_observations.py`提供，MPM沙地任务也使用相同布局。
+旧57/60维策略不直接兼容，当前批量配置不加载checkpoint，从零训练。
+
+沙地任务已关闭关节角度随机化：初始化及回合重置时使用默认关节角，关节速度为0。
+WalkOnSandProxy直接继承原生PPO配置（`algorithm.class_name="PPO"`），Actor、动作标准差和Critic
+从第一轮正常联合优化，KL自适应学习率也从第一轮生效。当前5组批量训练均继承该设置。
+可选预热实现保留在`rl/actor_warmup_ppo.py`，当前没有绑定；无需传入`actor_warmup_iterations`，
+也不再输出扩展的`Loss/actor_frozen`状态。
 
 网络输出世界系 `[Fx,Fy,Fz,Tx,Ty,Tz]`。力矩参考点使用原采集刚体属性中的对应轮质心，
 按当前link位姿转换成世界点P，再移到当前仿真轮质心C：
@@ -90,19 +104,39 @@ tau_C = tau_P + (P − C) × F
 刚性地板接触继续由MJWarp求解器处理。Proxy任务额外配置`foot_ground_contacts`传感器，
 只读取四个轮端与`/World/ground`碰撞形状之间的实际反力（包含摩擦），不把自身碰撞当成地面支撑。
 每个20ms控制周期在物理推进完成后，将最后一次施加的代理力与当前地板反力相加：
-`Fz_support = Fz_proxy + Fz_ground`，仅当`Fz_support > 5 N`时判为支撑，其他情况累计卸载时间。
+`Fz_support = Fz_proxy + Fz_ground`，仅当`Fz_support > 20 N`时判为支撑，其他情况累计卸载时间。
 腾空、抬升、前向迈步和相位奖励共用这一50Hz接触状态；同一步重复读取不会重复计时。
 地板反力仅供判定，不会再次作为外力施加。`force_w`、外力历史和`fz_mean`日志仍只记录代理力。
 Actor/Critic观测、动作和网络结构保持不变；MPM任务仍使用自己的冲量采样器。
 
 Walk和共享沙地任务的抬升、相位奖励当前都使用对角分组：FL+HR与FR+HL交替。
+沙地通用配置当前启用`rotation_gait_status`（权重2）和`rotation_gait_symmetry`（权重20），
+代理与MPM任务共用。当前批量训练共5组：基线、旧线性速度函数、姿态权重-25、抬升权重4及三者组合。
+均从`sand_10cm_walk_rotation_height25/model_5998.pt`独立续训5000轮，保留迭代计数、使用新优化器。
+抬升使用`current_height`、目标0.10m、前后偏置0.5；线/角速度奖励权重保持5/2。
+线性组的速度比峰值为1，零转向指令时线性角速度项得0分。
+批量脚本通过`reward_functions`逐组完整替换函数和参数，任务默认函数不变。
+其他参数沿用当前任务，包括HipX权重-1和名义沙面0.20m。
+`feet_forward_step`继续禁用（权重0），其余奖励继承当前源码默认值。
 `rotation_gait_status`调用`ProxyRotationGaitStatus`：一组两脚均卸载、另一组两脚均支撑；
-沙地任务中，两条摆动腿都达到`min_air_time`后，以两腿较小的归一化抬升进度计分，只奖励新的最大进度。
-沙地抬升参考仍为各足最近支撑时的世界Z，目标20cm，无需抬出沙面。
-Walk单独使用`reward_mode="rough"`、`min_air_time=0`：摆动组平均高度比支撑组高出20cm时，
+共享沙地任务默认使用`reward_mode="current_height"`，`relative_height`可通过参数选择。
+两者`min_air_time=0`。`relative_height`的抬升高度差为
+`当前摆动对角组平均足底世界Z - 当前支撑对角组平均足底世界Z`，
+高度差在`(0,0.10]m`时原始奖励为`高度差/0.10`，超过0.10m或不大于0时为0。
+无需历史支撑点参考，有效控制步持续按当前高度差计分；超高后回到有效区间可重新得分。
+四足共同升降抵消，支撑脚下陷也会改变高度差。
+本模式不使用迈步历史峰值计算奖励，峰值缓冲仅保留用于完成步数等诊断统计；无需抬出沙面。
+原`current_height`历史支撑点模式和`progress`进度模式保留，可显式切回。
+`current_height`以摆动脚相对各自最近支撑位置的平均抬升量`h`计分：
+`0<h<=target_height`时基础得分为`h/target_height`，超过目标或不大于0时为0。
+通用配置`front_height_bias=0.5`：基础得分再乘
+`1+0.5*clip((h_front-h_rear)/target_height,-1,1)`。
+这里比较摆动对角组前/后脚各自相对最近支撑点的抬升量，非足端绝对世界高度。
+前脚抬得更高时增加得分，后脚更高时减少，等高保持原得分；倍率0.5～1.5，最终原始分最高1.5。
+设`front_height_bias=0`可关闭该偏好。其他模式不使用此系数。
+Walk使用`reward_mode="rough"`、`min_air_time=0`：摆动组平均高度比支撑组高出10cm时，
 每个控制步持续得1分；仍要求对角双脚卸载、另一对角双脚支撑。
-Walk的`feet_air_time.max_air_time=None`，取消计分时间上限，0.5s计分基准和短腾空负分保留。
-沙地任务的进度模式、腾空时间门槛及1s计分上限保持不变。
+共享沙地任务的`feet_air_time`当前为0.3s计分参考、1s计分上限和0.1倍短腾空负分。
 `rotation_gait_symmetry`调用`ProxyRotationGaitSymmetry`，4s滑动窗口中两种对角状态的占比分别为pA/pB，
 原始分数为`2*sqrt(pA*pB)`，最高1；不设固定周期，不要求相位占用满足抬升的最短卸载时间。
 原三腿支撑爬行函数仍保留，可切回。现有权重和批量各组的时间门槛保持不变。
@@ -124,7 +158,7 @@ uv run python scripts/proxy_training_trace.py --iterations 100
 
 - `trace.npz`：时间、FL/FR/HL/HR足端有符号深度、网络输入深度、代理/刚性/合力的世界XYZ分量、
   支撑/落足、卸载时间、重置标记、回合步数和速度指令。
-- `signals.json`：采样周期、沙面、5N阈值、模型与奖励权重；`command.json`保存完整启动命令。
+- `signals.json`：采样周期、沙面、接触阈值（当前代理任务20N）、模型与奖励权重；`command.json`保存完整启动命令。
 - `training.log`：原生训练输出，策略checkpoint与TensorBoard仍写入原生`logs/rsl_rl/`目录。
 - `foot_depth_forces.png`/`.pdf`：四足深度与Fz曲线；`foot_depth_forces_first_8s.png`为前8秒细节。
 - `summary.json`：深度/受力范围、重置次数，以及刚性地板反力补充支撑判定的样本数。

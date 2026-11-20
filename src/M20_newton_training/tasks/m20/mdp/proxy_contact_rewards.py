@@ -689,15 +689,24 @@ class ProxyFootLiftConsistency(ManagerTermBase):
 
 
 class ProxyRotationGaitStatus(ManagerTermBase):
-    """Reward paired lift progress or a sustained Rough-style diagonal height status.
+    """Score exact diagonal swing/support patterns with selectable lift shaping.
 
-    Each swing pair can earn at most one normalized unit per swing. Both feet
-    must unload for min_air_time while the opposite diagonal supports the robot. Holding a pose
-    or lowering and raising within the already credited height earns nothing.
-    Low commands and environment resets clear support history.
-    ``reward_mode="rough"`` instead scores one every valid step whose mean swing
-    height exceeds mean support height by target_height. It needs no support-height
-    history; exact opposing contact and command gates are retained for Walk.
+    ``progress`` rewards only new paired lift maxima relative to last support.
+    ``rough`` rewards one every valid step above the mean height-difference target.
+    ``current_height`` rewards the current mean swing-foot lift above each foot's
+    own last supported world Z, divided by target_height within [0, target_height];
+    mean lifts above target_height earn zero.
+    Supported samples update each reference; it remains frozen during unloading.
+    No peak is subtracted or held, and unseen support references cannot earn credit.
+    Optional ``front_height_bias`` scales current_height credit by
+    1 + bias * clip((front_lift - rear_lift) / target_height, -1, 1).
+    It compares each foot's own lift, not the absolute world height of the feet.
+    ``relative_height`` rewards the current mean swing-minus-support world-Z
+    difference divided by target_height within [0, target_height]; differences
+    above target_height earn zero, without a support history requirement.
+    Common vertical translation cancels from this measure.
+    Peak buffers in sustained modes are used only for completion diagnostics.
+    All modes retain the same contact, command and minimum unloading-time gates.
     """
 
     def __init__(self, cfg, env):
@@ -706,8 +715,11 @@ class ProxyRotationGaitStatus(ManagerTermBase):
             raise ValueError("target_height must be positive")
         if not math.isfinite(cfg.params.get("min_air_time", 0.0)) or cfg.params.get("min_air_time", 0.0) < 0:
             raise ValueError("min_air_time must be finite and nonnegative")
-        if cfg.params.get("reward_mode", "progress") not in ("progress", "rough"):
-            raise ValueError("reward_mode must be progress or rough")
+        if cfg.params.get("reward_mode", "progress") not in ("progress", "rough", "current_height", "relative_height"):
+            raise ValueError("reward_mode must be progress, rough, current_height or relative_height")
+        bias = cfg.params.get("front_height_bias", 0.0)
+        if not math.isfinite(bias) or not 0.0 <= bias <= 1.0:
+            raise ValueError("front_height_bias must be finite and in [0, 1]")
         self.support_height = torch.zeros((env.num_envs, 4), device=env.device)
         self.support_seen = torch.zeros_like(self.support_height, dtype=torch.bool)
         self.peak_progress = torch.zeros((env.num_envs, 2), device=env.device)
@@ -739,6 +751,7 @@ class ProxyRotationGaitStatus(ManagerTermBase):
         min_air_time=0.0,
         sensor_cfg=None,
         reward_mode="progress",
+        front_height_bias=0.0,
     ):
         gate = _gait_command_gate(env, command_name, min_command_norm)
         self._reset_state(~gate)
@@ -751,6 +764,10 @@ class ProxyRotationGaitStatus(ManagerTermBase):
         self.support_seen |= supported
         a = _group_ids(term, group_a_body_names)
         b = _group_ids(term, group_b_body_names)
+        front_slots = (
+            _group_ids(term, ["fl_wheel", "fr_wheel"])
+            if reward_mode == "current_height" and front_height_bias > 0.0 else []
+        )
         patterns = _diagonal_patterns(contact, a, b)
         progress = ((height - self.support_height) / target_height).clamp(0.0, 1.0)
         reward = torch.zeros(env.num_envs, device=env.device)
@@ -763,10 +780,28 @@ class ProxyRotationGaitStatus(ManagerTermBase):
             self.peak_progress[:, i] = torch.where(landed, 0.0, self.peak_progress[:, i])
             long_enough = (state.current_air_time[:, swing] + 1e-6 >= min_air_time).all(dim=1)
             valid = patterns[:, i] & gate & long_enough
-            if reward_mode == "rough":
+            if reward_mode == "current_height":
+                valid &= self.support_seen[:, swing].all(dim=1)
+                lift = height[:, swing] - self.support_height[:, swing]
+                mean_lift = lift.mean(dim=1)
+                paired = (mean_lift / target_height).clamp(0.0, 1.0)
+                paired = torch.where(mean_lift > target_height, 0.0, paired)
+                credit = paired
+                if front_slots:
+                    front = next(j for j, slot in enumerate(swing) if slot in front_slots)
+                    rear = 1 - front
+                    imbalance = ((lift[:, front] - lift[:, rear]) / target_height).clamp(-1.0, 1.0)
+                    credit = paired * (1.0 + front_height_bias * imbalance)
+            elif reward_mode in ("rough", "relative_height"):
                 support = a if i == 0 else b
                 difference = height[:, swing].mean(dim=1) - height[:, support].mean(dim=1)
-                paired = (difference > target_height).to(height.dtype)
+                paired = (
+                    (difference / target_height).clamp(0.0, 1.0)
+                    if reward_mode == "relative_height"
+                    else (difference > target_height).to(height.dtype)
+                )
+                if reward_mode == "relative_height":
+                    paired = torch.where(difference > target_height, 0.0, paired)
                 credit = paired
             else:
                 valid &= self.support_seen[:, swing].all(dim=1)

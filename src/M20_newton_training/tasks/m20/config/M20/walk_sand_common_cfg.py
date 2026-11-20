@@ -1,12 +1,14 @@
-"""Shared WalkOnSand/WalkOnSandProxy rewards, commands and robot reset configuration."""
+"""Shared sand-walking observations, rewards, commands and robot reset configuration."""
 
 from collections.abc import Callable
 from typing import cast
 
 from torch import Tensor
 
-from isaaclab.managers import RewardTermCfg, SceneEntityCfg, TerminationTermCfg
+from isaaclab.envs.mdp import base_lin_vel
+from isaaclab.managers import ObservationTermCfg, RewardTermCfg, SceneEntityCfg, TerminationTermCfg
 from isaaclab.utils import configclass, replace
+from isaaclab.utils.noise import UniformNoiseCfg
 
 from M20_newton_training.tasks.m20.mdp.crawl_rewards import BalancedFootClearanceReward
 from M20_newton_training.tasks.m20.mdp.position_tracking_rewards import CommandPositionTrackingReward
@@ -25,6 +27,12 @@ from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
     sand_base_height_l2,
 )
 from M20_newton_training.tasks.m20.mdp.rewards import track_ang_vel_z_exp, track_lin_vel_xy_exp
+from M20_newton_training.tasks.m20.mdp.sand_observations import (
+    sand_base_clearance,
+    sand_feet_contact,
+    sand_feet_depth,
+    sand_layer_depth,
+)
 from M20_newton_training.tasks.m20.mdp.sand_walk_terminations import sand_reset_penalty
 from M20_newton_training.tasks.m20.mdp.single_axis_velocity import SingleAxisVelocityCommandCfg
 from M20_newton_training.tasks.m20.mdp.walk_on_sand_rewards import (
@@ -32,9 +40,36 @@ from M20_newton_training.tasks.m20.mdp.walk_on_sand_rewards import (
     WalkOnSandStepCompletionReward,
 )
 from M20_newton_training.tasks.m20.sand_walk_settings import SAND_WALK_SURFACE_HEIGHT
-from M20_newton_training.tasks.m20.velocity_env_cfg import TerminationsCfg
+from M20_newton_training.tasks.m20.velocity_env_cfg import ObservationsCfg, TerminationsCfg
 
 from .rough_env_cfg import DeeproboticsM20RewardsCfg
+
+
+@configclass
+class SandWalkCriticCfg(ObservationsCfg.CriticCfg):
+    """Base robot state followed by ten privileged sand values (60 + 10 dimensions)."""
+
+    sand_layer_depth = ObservationTermCfg(
+        func=sand_layer_depth, params={"surface_height": SAND_WALK_SURFACE_HEIGHT}, clip=(0.0, 2.0)
+    )
+    feet_sand_depth = ObservationTermCfg(
+        func=sand_feet_depth,
+        params={"surface_height": SAND_WALK_SURFACE_HEIGHT, "action_term_name": "sand_proxy"},
+        clip=(-2.0, 2.0),
+    )
+    feet_sand_contact = ObservationTermCfg(
+        func=sand_feet_contact, params={"action_term_name": "sand_proxy"}, clip=(0.0, 1.0)
+    )
+    base_sand_clearance = ObservationTermCfg(
+        func=sand_base_clearance, params={"surface_height": SAND_WALK_SURFACE_HEIGHT}, clip=(-2.0, 2.0)
+    )
+
+
+@configclass
+class SandWalkObservationsCfg(ObservationsCfg):
+    """Sand walking uses 60 policy inputs and 70 privileged critic inputs."""
+
+    critic: SandWalkCriticCfg = SandWalkCriticCfg()
 
 
 @configclass
@@ -101,7 +136,7 @@ class SandWalkRewardsCfg(DeeproboticsM20WalkOnSandRewardsCfg):
     )
     front_wheels_height = RewardTermCfg(
         func=front_wheels_height_reward,
-        weight=10.0,
+        weight=0.0,
         params={
             "asset_cfg": SceneEntityCfg(
                 "robot", body_names=["fl_wheel", "fr_wheel", "hl_wheel", "hr_wheel"], preserve_order=True
@@ -144,7 +179,7 @@ class SandWalkRewardsCfg(DeeproboticsM20WalkOnSandRewardsCfg):
     )
     feet_forward_step = RewardTermCfg(
         func=cast(Callable[..., Tensor], ProxyFootForwardStepReward),
-        weight=50.0,
+        weight=0.0,
         params={
             "target_stride": 0.12,
             "repeat_decay": 1.0,
@@ -166,7 +201,7 @@ class SandWalkRewardsCfg(DeeproboticsM20WalkOnSandRewardsCfg):
     )
     hipx_symmetry = RewardTermCfg(
         func=proxy_hipx_symmetry_l2,
-        weight=-0.5,
+        weight=0.0,
         params={
             "asset_cfg": SceneEntityCfg(
                 "robot",
@@ -188,10 +223,16 @@ class SandWalkTerminationsCfg(TerminationsCfg):
 
 
 def configure_sand_walk_task(cfg, contact_term_name):
-    """Bind shared rewards to a force provider without changing the policy interfaces."""
+    """Bind sand observations and rewards to the selected force provider."""
+    # Rough removes policy linear velocity; restore it only for the sand-walking tasks.
+    cfg.observations.policy.base_lin_vel = ObservationTermCfg(
+        func=base_lin_vel, noise=UniformNoiseCfg(n_min=-0.1, n_max=0.1), clip=(-100.0, 100.0), scale=1.0
+    )
+    cfg.observations.critic.feet_sand_depth.params["action_term_name"] = contact_term_name
+    cfg.observations.critic.feet_sand_contact.params["action_term_name"] = contact_term_name
     robot = cfg.scene.robot
     cfg.scene.robot = replace(
-        robot, init_state=replace(robot.init_state, pos=(0.0, 0.0, SAND_WALK_SURFACE_HEIGHT + 0.53))
+        robot, init_state=replace(robot.init_state, pos=(-0.5, 0.0, SAND_WALK_SURFACE_HEIGHT + 0.38))
     )
     if contact_term_name == "sand_proxy":
         cfg.actions.sand_proxy.surface_height = SAND_WALK_SURFACE_HEIGHT
@@ -217,20 +258,20 @@ def configure_sand_walk_task(cfg, contact_term_name):
     cfg.rewards.feet_forward_step.params["action_term_name"] = contact_term_name
     cfg.rewards.com_forward_l2.params["action_term_name"] = contact_term_name
     # Match Walk's capped air time and reduced short-air penalty with the selected force provider.
-    cfg.rewards.feet_air_time.params.update(threshold=0.3, max_air_time=1.0, short_air_penalty_scale=0.2)
+    cfg.rewards.feet_air_time.params.update(threshold=0.3, max_air_time=1.0, short_air_penalty_scale=0.1)
     for name in ("feet_air_time", "feet_lift_consistency"):
         getattr(cfg.rewards, name).params.update(command_name="base_velocity", min_command_norm=0.1)
-    # Match Walk's sustained diagonal lift and phase scoring with sand contact forces.
-    # Lift compares mean swing/support world-Z heights without an air-time minimum.
+    # Score mean lift above each foot's last support, favoring front-foot lift within a diagonal.
     cfg.rewards.rotation_gait_status = RewardTermCfg(
         func=cast(Callable[..., Tensor], ProxyRotationGaitStatus),
-        weight=3.0,
+        weight=2.0,
         params={
             "target_height": 0.10,
             "group_a_body_names": ["fl_wheel", "hr_wheel"],
             "group_b_body_names": ["fr_wheel", "hl_wheel"],
             "min_air_time": 0.0,
-            "reward_mode": "rough",
+            "reward_mode": "current_height",
+            "front_height_bias": 0.5,
             "action_term_name": contact_term_name,
             "command_name": "base_velocity",
             "min_command_norm": 0.1,
@@ -238,9 +279,9 @@ def configure_sand_walk_task(cfg, contact_term_name):
     )
     cfg.rewards.rotation_gait_symmetry = RewardTermCfg(
         func=cast(Callable[..., Tensor], ProxyRotationGaitSymmetry),
-        weight=15.0,
+        weight=20.0,
         params={
-            "window_s": 4.0,
+            "window_s": 2.0,
             "group_a_body_names": ["fl_wheel", "hr_wheel"],
             "group_b_body_names": ["fr_wheel", "hl_wheel"],
             "action_term_name": contact_term_name,
@@ -250,43 +291,45 @@ def configure_sand_walk_task(cfg, contact_term_name):
     )
     cfg.rewards.base_height_l2.func = sand_base_height_l2
     cfg.rewards.base_height_l2.params = {"target_height": 0.38, "surface_height": SAND_WALK_SURFACE_HEIGHT}
-    cfg.rewards.base_height_l2.weight = -10.0
-    cfg.rewards.flat_orientation_l2.weight = -20.0
+    cfg.rewards.base_height_l2.weight = -25.0
+    cfg.rewards.flat_orientation_l2.weight = -50.0
+    cfg.rewards.bad_orientation_penalty.weight = -1000.0
     cfg.rewards.flat_orientation_l2.func = forward_pitch_orientation_l2
     cfg.rewards.flat_orientation_l2.params = {
         "command_name": "base_velocity",
-        "forward_pitch_deg": -15.0,
+        "forward_pitch_deg": 0.0,
         "forward_threshold": 0.1,
     }
-    # Keep lateral posture control while allowing sagittal stepping freedom.
-    cfg.rewards.hipx_joint_pos_penalty.weight = -0.5
-    cfg.rewards.joint_mirror.weight = -0.03
+    # Regularize leg acceleration and torque without a default-position penalty.
+    cfg.rewards.hipx_joint_pos_penalty.weight = -1.0
+    cfg.rewards.joint_mirror.weight = 0.0
     cfg.rewards.lin_vel_z_l2.weight = -2.0
-    cfg.rewards.joint_vel_wheel_l2.weight = -10.0
-    cfg.rewards.feet_air_time.weight = 5.0
-    cfg.rewards.joint_acc_l2.weight = 0.0
-    cfg.rewards.joint_torques_l2.weight = 0.0
+    cfg.rewards.joint_vel_wheel_l2.weight = -0.2
+    cfg.rewards.feet_air_time.weight = 20.0
+    cfg.rewards.joint_acc_l2.weight = -2e-7
+    cfg.rewards.joint_acc_wheel_l2.weight = -1e-7
+    cfg.rewards.joint_torques_l2.weight = -2.5e-5
     cfg.rewards.action_rate_l2.weight = 0.0
-    cfg.rewards.ang_vel_xy_l2.weight = 0.0
+    cfg.rewards.ang_vel_xy_l2.weight = -0.0
     for name in (
         "contact_forces",
         "hipy_joint_pos_penalty",
         "knee_joint_pos_penalty",
-        "joint_acc_wheel_l2",
         "action_smooth_l2",
         "feet_slide_ang_z_cmd",
+        "joint_torques_l2",
         "stand_still",
         "undesired_contacts",
         "sand_diagonal_steps",
         "sand_step_completion",
         "feet_lift_consistency",
-        "joint_acc_l2",
-        "joint_torques_l2",
     ):
         getattr(cfg.rewards, name).weight = 0.0
     cfg.events.randomize_reset_base.params["pose_range"].update(
-        x=(0.0, 0.0), y=(0.0, 0.0), roll=(-0.02, 0.02), pitch=(-0.02, 0.02),yaw=(0.0, 0.0)
+        x=(0.0, 0.0), y=(0.0, 0.0), roll=(-0.1, 0.1), pitch=(-0.1, 0.1),yaw=(0.0, 0.0)
     )
+    # Reset joints to the default pose and zero velocity on initial and episode resets.
+    cfg.events.randomize_reset_joints.params.update(position_range=(1.0, 1.0), velocity_range=(0.0, 0.0))
     # Choose among nonzero-range axes uniformly; (0, 0) disables an axis.
     command = cfg.commands.base_velocity
     cfg.commands.base_velocity = SingleAxisVelocityCommandCfg(

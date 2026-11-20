@@ -46,7 +46,7 @@ def test_neural_payload_is_unmodified_and_analytical_imports_remain_compatible()
         assert (DEFAULT_MODEL_PATH.parent / name).read_bytes() == (ROOT / "sand_pinn_lab/model" / name).read_bytes()
     metadata = json.loads((DEFAULT_MODEL_PATH.parent / "deployment.json").read_text())
     assert metadata["checkpoint_sha256"] == hashlib.sha256(DEFAULT_MODEL_PATH.read_bytes()).hexdigest()
-    assert metadata["fixed_surface_height_m"] == 0.20
+    assert metadata["fixed_surface_height_m"] == 0.15
 
 
 def test_features_history_and_frozen_prediction_match_the_packaged_network():
@@ -181,17 +181,19 @@ def test_action_reads_fixed_plane_depth_center_velocity_actual_joint_speed_and_a
     assert not action.torque_w[0].any() and not action.force_w[0].any()
 
 
-def test_default_neural_task_keeps_policy_io_and_other_tasks_unchanged():
+def test_default_neural_task_uses_sand_observations_and_preserves_other_tasks():
     before = to_dict(DeeproboticsM20WalkOnSandEnvCfg())
     walk = DeeproboticsM20WalkEnvCfg()
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
     assert cfg.actions.sand_proxy.model_kind == "neural"
     assert Path(cfg.actions.sand_proxy.model_path) == DEFAULT_MODEL_PATH
-    assert cfg.actions.sand_proxy.surface_height == 0.20
+    assert cfg.actions.sand_proxy.surface_height == 0.15
     assert cfg.actions.sand_proxy.rigid_contact_sensor == "foot_ground_contacts"
     assert cfg.scene.foot_ground_contacts.filter_shape_prim_expr == ["/World/ground(?:/.*)?"]
     assert cfg.sim.dt == 0.005 and cfg.decimation == 4
-    assert to_dict(cfg.observations) == to_dict(walk.observations)
+    assert cfg.observations.policy.base_lin_vel is not None
+    assert walk.observations.policy.base_lin_vel is None
+    assert cfg.observations.critic.feet_sand_contact.params["action_term_name"] == "sand_proxy"
     assert to_dict(cfg.actions.joint_pos) == to_dict(walk.actions.joint_pos)
     assert to_dict(cfg.actions.joint_vel) == to_dict(walk.actions.joint_vel)
     assert to_dict(DeeproboticsM20WalkOnSandEnvCfg()) == before

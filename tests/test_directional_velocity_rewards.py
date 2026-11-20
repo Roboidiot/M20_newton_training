@@ -1,5 +1,7 @@
 """Body-frame v/cmd rewards, zero-command safety and isolated task bindings."""
 
+import importlib.util
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +17,28 @@ from M20_newton_training.tasks.m20.mdp.rewards import (
     track_ang_vel_z_exp,
     track_lin_vel_xy_exp,
 )
+
+
+def _linear_cfg():
+    """Exercise batch-local rebinding; the task's default remains exponential."""
+    spec = importlib.util.spec_from_file_location(
+        "linear_test_batch", Path(__file__).parents[1] / "scripts/train_batch.py"
+    )
+    assert spec is not None and spec.loader is not None
+    batch = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(batch)
+    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
+    batch.apply_reward_functions(cfg, {
+        "track_lin_vel_xy_exp": {
+            "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_lin_vel_xy",
+            "params": {"command_name": "base_velocity", "max_reward": 1.0},
+        },
+        "track_ang_vel_z_exp": {
+            "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_ang_vel_z",
+            "params": {"command_name": "base_velocity", "max_reward": 1.0},
+        },
+    })
+    return cfg
 
 
 def _env(commands, velocities, turns=None):
@@ -104,7 +128,7 @@ def test_zero_commands_never_divide_by_zero_even_with_nonzero_body_motion():
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("command", [0.3, -0.3])
 def test_active_linear_reward_decreases_after_peak_and_preserves_negative_tail(axis, command):
-    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg().rewards.track_lin_vel_xy_exp
+    cfg = _linear_cfg().rewards.track_lin_vel_xy_exp
     ratios = [0.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, -10.0]
     commands = [[0.0, 0.0, 0.0] for _ in range(len(ratios) + 1)]
     velocities = [[0.0, 0.0, 0.0] for _ in commands]
@@ -121,7 +145,7 @@ def test_active_linear_reward_decreases_after_peak_and_preserves_negative_tail(a
 
 @pytest.mark.parametrize("command", [0.3, -0.3])
 def test_active_turn_reward_matches_linear_shaping_and_preserves_negative_tail(command):
-    rewards = DeeproboticsM20WalkOnSandProxyEnvCfg().rewards
+    rewards = _linear_cfg().rewards
     cfg = rewards.track_ang_vel_z_exp
     ratios = [0.0, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, -10.0]
     commands = [[command, 0.0, command] for _ in ratios] + [[0.0, 0.0, 0.0]]
@@ -135,14 +159,18 @@ def test_active_turn_reward_matches_linear_shaping_and_preserves_negative_tail(c
     assert (values * cfg.weight * 0.02).max().item() == pytest.approx(0.04)
 
 
-def test_only_proxy_bindings_change_and_original_exponential_helpers_remain_usable():
+def test_batch_linear_bindings_are_local_and_exponential_helpers_remain_usable():
     before = to_dict(DeeproboticsM20WalkEnvCfg())
-    cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
+    proxy_before = to_dict(DeeproboticsM20WalkOnSandProxyEnvCfg())
+    cfg = _linear_cfg()
     assert cfg.rewards.track_lin_vel_xy_exp.func is command_direction_lin_vel_xy
     assert cfg.rewards.track_ang_vel_z_exp.func is command_direction_ang_vel_z
     assert cfg.rewards.track_lin_vel_xy_exp.params == {"command_name": "base_velocity", "max_reward": 1.0}
     assert cfg.rewards.track_ang_vel_z_exp.params == {"command_name": "base_velocity", "max_reward": 1.0}
     assert to_dict(DeeproboticsM20WalkEnvCfg()) == before
+    assert to_dict(DeeproboticsM20WalkOnSandProxyEnvCfg()) == proxy_before
+    assert DeeproboticsM20WalkOnSandProxyEnvCfg().rewards.track_lin_vel_xy_exp.func is track_lin_vel_xy_exp
+    assert DeeproboticsM20WalkOnSandProxyEnvCfg().rewards.track_ang_vel_z_exp.func is track_ang_vel_z_exp
     env = _env([[0.3, 0, 0.2]], [[0.3, 0, 0]], turns=[0.2])
     torch.testing.assert_close(track_lin_vel_xy_exp(env, 0.3, "base_velocity"), torch.ones(1))
     torch.testing.assert_close(track_ang_vel_z_exp(env, 0.3, "base_velocity"), torch.ones(1))

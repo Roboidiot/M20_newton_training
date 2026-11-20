@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import importlib
+import inspect
 import json
 import math
 import os
@@ -37,6 +38,7 @@ RUN_KEYS = {
     "experiment_name",
     "agent",
     "reward_weights",
+    "reward_functions",
     "overrides",
 }
 CLI_KEYS = (
@@ -81,7 +83,7 @@ def load_runs(config_path: Path) -> list[dict]:
             raise ValueError(f"Invalid run options: {entry!r}")
         run = copy.deepcopy(defaults)
         run.update(copy.deepcopy(entry))
-        for key in ("reward_weights", "overrides"):
+        for key in ("reward_weights", "reward_functions", "overrides"):
             base, changes = defaults.get(key, {}), entry.get(key, {})
             if not isinstance(base, dict) or not isinstance(changes, dict):
                 raise ValueError(f"{key} must be a JSON object")
@@ -122,6 +124,19 @@ def validate_run(run: dict) -> None:
             raise ValueError(f"{name}: invalid reward name {key!r}")
         if type(value) not in (int, float) or not math.isfinite(value):
             raise ValueError(f"{name}: reward weight {key} must be finite")
+    for key, value in run["reward_functions"].items():
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", key):
+            raise ValueError(f"{name}: invalid reward name {key!r}")
+        if not isinstance(value, dict) or set(value) != {"func", "params"}:
+            raise ValueError(f"{name}: reward_functions.{key} must contain func and params")
+        reference = value["func"]
+        if not isinstance(reference, str) or not re.fullmatch(
+            r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*", reference
+        ):
+            raise ValueError(f"{name}: reward function {key} needs a module.path:function reference")
+        if not isinstance(value["params"], dict):
+            raise ValueError(f"{name}: reward function {key} params must be an object")
+        json.dumps(value["params"], allow_nan=False)
     for key, value in run["overrides"].items():
         if not re.fullmatch(r"(?:env|agent)(?:\.[A-Za-z_][A-Za-z0-9_]*)+", key):
             raise ValueError(f"{name}: override {key!r} must be an env.* or agent.* path")
@@ -146,6 +161,34 @@ def build_train_args(run: dict, timestamp: str, checkpoint: str | None = None) -
     for key, value in run["overrides"].items():
         args.append(f"{key}={json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(',', ':'))}")
     return args
+
+
+def resolve_reward_function(reference: str):
+    """Import a configured function without importing simulation code during dry runs."""
+    module, symbol = reference.split(":")
+    try:
+        func = getattr(importlib.import_module(module), symbol)
+    except (ImportError, AttributeError) as error:
+        raise ValueError(f"Cannot resolve reward function {reference!r}: {error}") from error
+    if not callable(func):
+        raise ValueError(f"Reward function {reference!r} is not callable")
+    return func
+
+
+def apply_reward_functions(cfg, functions: dict) -> None:
+    """Replace each function's entire parameter dict so old arguments cannot leak."""
+    for name, definition in functions.items():
+        term = getattr(cfg.rewards, name, None)
+        if term is None or not hasattr(term, "func"):
+            raise ValueError(f"Reward {name!r} does not exist or has no reusable definition in this task")
+        func = resolve_reward_function(definition["func"])
+        params = copy.deepcopy(definition["params"])
+        try:
+            inspect.signature(func).bind(None, **params)
+        except TypeError as error:
+            raise ValueError(f"Invalid parameters for reward {name!r}: {error}") from error
+        term.func = func
+        term.params = params
 
 
 def apply_reward_weights(cfg, weights: dict) -> None:
@@ -185,6 +228,7 @@ def configure_training() -> None:
         # Deferral is temporary and restored even when construction fails.
         with patch.object(LocomotionVelocityRoughEnvCfg, "disable_zero_weight_rewards", lambda self: None):
             cfg = env_class()
+        apply_reward_functions(cfg, run.get("reward_functions", {}))
         apply_reward_weights(cfg, run["reward_weights"])
         return cfg
 
@@ -213,6 +257,16 @@ def validate_spec(spec_path: Path) -> None:
     for name, expected in spec["run"]["reward_weights"].items():
         if weights.get(name, 0.0) != expected:
             raise ValueError(f"Reward {name!r} was overridden after batch configuration")
+    functions = {}
+    for name, definition in spec["run"].get("reward_functions", {}).items():
+        term = getattr(cfg.rewards, name)
+        if term is None:
+            continue
+        func = resolve_reward_function(term.func) if isinstance(term.func, str) else term.func
+        if func is not resolve_reward_function(definition["func"]):
+            raise ValueError(f"Reward function {name!r} was overridden after batch configuration")
+        inspect.signature(func).bind(None, **term.params)
+        functions[name] = {"func": definition["func"], "params": term.params}
     log_dir = PROJECT_ROOT / "logs" / "rsl_rl" / agent.experiment_name / f"{spec['timestamp']}_{agent.run_name}"
     write_json(
         spec_path.with_name("validation.json"),
@@ -221,6 +275,7 @@ def validate_spec(spec_path: Path) -> None:
             "num_envs": cfg.scene.num_envs,
             "max_iterations": agent.max_iterations,
             "active_reward_weights": weights,
+            "reward_functions": functions,
             "training_log_dir": str(log_dir),
         },
     )
@@ -334,6 +389,8 @@ def run_batch(args: argparse.Namespace) -> int:
             ]
             print(f"\n[{index}/{len(runs)}] {run['name']}\n{shlex.join(command)}")
             print("reward_weights =", json.dumps(run["reward_weights"], ensure_ascii=False))
+            if run["reward_functions"]:
+                print("reward_functions =", json.dumps(run["reward_functions"], ensure_ascii=False))
         print("\nDry run: no simulation, training or output directory was created.")
         return 0
     # Verify all explicit checkpoints before creating a training queue.

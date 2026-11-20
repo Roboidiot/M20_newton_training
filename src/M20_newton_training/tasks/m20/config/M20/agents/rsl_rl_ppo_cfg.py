@@ -4,9 +4,15 @@
 # Copyright (c) 2024-2025 Ziqi Fan
 # SPDX-License-Identifier: Apache-2.0
 
-from isaaclab.utils import configclass
+from isaaclab.utils import configclass, to_dict
 
 from isaaclab_rl.rsl_rl import RslRlMLPModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
+
+
+@configclass
+class ActorWarmupPpoAlgorithmCfg(RslRlPpoAlgorithmCfg):
+    class_name: str = "M20_newton_training.rl.actor_warmup_ppo:ActorWarmupPPO"
+    actor_warmup_iterations: int = 3100
 
 
 @configclass
@@ -77,6 +83,10 @@ class DeeproboticsM20WalkOnSandProxyPPORunnerCfg(DeeproboticsM20WalkOnSandPPORun
     def __post_init__(self):
         super().__post_init__()
         self.experiment_name = "deeprobotics_m20_walk_on_sand_proxy"
+        # Preserve the inherited PPO settings and change only the algorithm type.
+        # algorithm = to_dict(self.algorithm)
+        # algorithm.pop("class_name")
+        # self.algorithm = ActorWarmupPpoAlgorithmCfg(**algorithm)
 
 
 @configclass

@@ -91,6 +91,40 @@ def test_group_merge_is_independent_and_does_not_inherit_the_previous_group(tmp_
     assert second["reward_weights"]["feet_air_time"] == 5.0
 
 
+def test_reward_functions_merge_by_term_and_do_not_leak_params_between_runs(tmp_path):
+    original = {"func": "builtins:pow", "params": {"exp": 2}}
+    replacement = {"func": "builtins:abs", "params": {}}
+    runs = batch.load_runs(_config(
+        tmp_path,
+        [{"name": "one", "reward_functions": {"feet_air_time": replacement}}, {"name": "two"}],
+        {"reward_functions": {"feet_air_time": original}},
+    ))
+    assert runs[0]["reward_functions"]["feet_air_time"] == replacement
+    assert runs[1]["reward_functions"]["feet_air_time"] == original
+    runs[0]["reward_functions"]["feet_air_time"]["params"]["extra"] = 1
+    assert runs[1]["reward_functions"]["feet_air_time"]["params"] == {"exp": 2}
+
+
+def test_reward_function_replacement_clears_old_parameters_and_copies_new_ones():
+    term = SimpleNamespace(func=lambda env, std: None, params={"std": .5}, weight=5.)
+    cfg = SimpleNamespace(rewards=SimpleNamespace(track=term))
+    definition = {"track": {"func": "builtins:pow", "params": {"exp": 2}}}
+    batch.apply_reward_functions(cfg, definition)
+    assert term.func is pow and term.params == {"exp": 2} and term.weight == 5.
+    definition["track"]["params"]["exp"] = 3
+    assert term.params == {"exp": 2}
+    with pytest.raises(ValueError, match="Invalid parameters"):
+        batch.apply_reward_functions(cfg, {"track": {"func": "builtins:pow", "params": {"std": .5}}})
+    with pytest.raises(ValueError, match="does not exist"):
+        batch.apply_reward_functions(cfg, {"missing": {"func": "builtins:abs", "params": {}}})
+
+
+@pytest.mark.parametrize("reference", ["math:pi", "math:missing", "no_such_m20_module:func"])
+def test_reward_function_reference_must_resolve_to_a_callable(reference):
+    with pytest.raises(ValueError):
+        batch.resolve_reward_function(reference)
+
+
 @pytest.mark.parametrize(
     "changes",
     [
@@ -99,6 +133,12 @@ def test_group_merge_is_independent_and_does_not_inherit_the_previous_group(tmp_
         {"seed": -2},
         {"reward_weights": {"feet_air_time": float("nan")}},
         {"reward_weights": {"feet_air_time": True}},
+        {"reward_functions": {"feet_air_time": "builtins:abs"}},
+        {"reward_functions": {"feet_air_time": {"func": "builtins:abs"}}},
+        {"reward_functions": {"feet_air_time": {"func": "abs", "params": {}}}},
+        {"reward_functions": {"feet_air_time": {"func": None, "params": {}}}},
+        {"reward_functions": {"feet_air_time": {"func": "builtins:abs", "params": []}}},
+        {"reward_functions": {"feet_air_time": {"func": "builtins:abs", "params": {"bad": float("nan")}}}},
         {"overrides": {"env.rewards.feet_air_time.weight": 10.0}},
         {"overrides": {"agent.run_name": "collision"}},
         {"overrides": {"env.scene.num_envs": 100}},

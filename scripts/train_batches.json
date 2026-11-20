@@ -3,59 +3,81 @@
     "task": "M20NewtonTraining-M20-M20-WalkOnSandProxy",
     "physics": "newton_mjwarp",
     "num_envs": 2048,
-    "max_iterations": 2000,
+    "max_iterations": 5000,
     "seed": 42,
     "logger": "tensorboard",
     "viz": "none",
-    "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk/2026-11-12_14-59-10/model_700.pt",
+    "checkpoint": "logs/rsl_rl/deeprobotics_m20_walk_on_sand_proxy/sand_10cm_walk_rotation_height25/model_5998.pt",
     "resume_optimizer_state": false,
-    "reward_weights": {},
-    "overrides": {}
+    "reward_weights": {
+      "track_lin_vel_xy_exp": 5.0,
+      "track_ang_vel_z_exp": 2.0,
+      "flat_orientation_l2": -50.0,
+      "rotation_gait_status": 2.0
+    },
+    "overrides": {
+      "env.rewards.rotation_gait_status.params.reward_mode": "current_height",
+      "env.rewards.rotation_gait_status.params.target_height": 0.1,
+      "env.rewards.rotation_gait_status.params.front_height_bias": 0.5
+    },
+    "reward_functions": {}
   },
   "runs": [
     {
-      "name": "proxy_baseline"
+      "name": "proxy_01_baseline"
     },
     {
-      "name": "proxy_no_orientation",
+      "name": "proxy_02_linear_velocity",
+      "reward_functions": {
+        "track_lin_vel_xy_exp": {
+          "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_lin_vel_xy",
+          "params": {
+            "command_name": "base_velocity",
+            "max_reward": 1.0
+          }
+        },
+        "track_ang_vel_z_exp": {
+          "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_ang_vel_z",
+          "params": {
+            "command_name": "base_velocity",
+            "max_reward": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "proxy_03_orientation25",
       "reward_weights": {
-        "flat_orientation_l2": 0.0
+        "flat_orientation_l2": -25.0
       }
     },
     {
-      "name": "proxy_strong_orientation",
+      "name": "proxy_04_lift4",
       "reward_weights": {
-        "flat_orientation_l2": -50.0
+        "rotation_gait_status": 4.0
       }
     },
     {
-      "name": "proxy_air_threshold_01",
-      "overrides": {
-        "env.rewards.feet_air_time.params.threshold": 0.1
-      }
-    },
-    {
-      "name": "proxy_air_threshold_05",
-      "overrides": {
-        "env.rewards.feet_air_time.params.threshold": 0.5
-      }
-    },
-    {
-      "name": "proxy_no_forward_step",
+      "name": "proxy_05_combined",
+      "reward_functions": {
+        "track_lin_vel_xy_exp": {
+          "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_lin_vel_xy",
+          "params": {
+            "command_name": "base_velocity",
+            "max_reward": 1.0
+          }
+        },
+        "track_ang_vel_z_exp": {
+          "func": "M20_newton_training.tasks.m20.mdp.rewards:command_direction_ang_vel_z",
+          "params": {
+            "command_name": "base_velocity",
+            "max_reward": 1.0
+          }
+        }
+      },
       "reward_weights": {
-        "feet_forward_step": 0.0
-      }
-    },
-    {
-      "name": "proxy_strong_lift",
-      "reward_weights": {
-        "rotation_gait_status": 6.0
-      }
-    },
-    {
-      "name": "proxy_strong_phase",
-      "reward_weights": {
-        "rotation_gait_symmetry": 30.0
+        "flat_orientation_l2": -25.0,
+        "rotation_gait_status": 4.0
       }
     }
   ]

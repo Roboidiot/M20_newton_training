@@ -1,4 +1,4 @@
-"""Walk-compatible training with frozen neural wheel wrenches on a fixed sand plane."""
+"""Privileged sand-walking training with frozen neural wheel wrenches on a fixed sand plane."""
 
 from typing import cast
 
@@ -18,6 +18,7 @@ from .rough_env_cfg import DeeproboticsM20ActionsCfg
 from .walk_env_cfg import DeeproboticsM20WalkEnvCfg
 from .walk_sand_common_cfg import (
     SAND_WALK_SURFACE_HEIGHT,
+    SandWalkObservationsCfg,
     SandWalkRewardsCfg,
     SandWalkTerminationsCfg,
     configure_sand_walk_task,
@@ -57,7 +58,7 @@ class FootProxySceneCfg(MySceneCfg):
 
 @configclass
 class FootProxyActionsCfg(DeeproboticsM20ActionsCfg):
-    sand_proxy = FootSandProxyActionCfg(contact_force_threshold=5.0, rigid_contact_sensor="foot_ground_contacts")
+    sand_proxy = FootSandProxyActionCfg(contact_force_threshold=20.0, rigid_contact_sensor="foot_ground_contacts")
 
 
 @configclass
@@ -68,6 +69,7 @@ class FootProxyRewardsCfg(SandWalkRewardsCfg):
 @configclass
 class DeeproboticsM20WalkOnSandProxyEnvCfg(DeeproboticsM20WalkEnvCfg):
     scene: FootProxySceneCfg = FootProxySceneCfg(num_envs=2048, env_spacing=3.5)
+    observations: SandWalkObservationsCfg = SandWalkObservationsCfg()
     actions: FootProxyActionsCfg = FootProxyActionsCfg()
     rewards: FootProxyRewardsCfg = FootProxyRewardsCfg()
     terminations: SandWalkTerminationsCfg = SandWalkTerminationsCfg()

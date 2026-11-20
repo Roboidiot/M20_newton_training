@@ -1,4 +1,4 @@
-"""Physical invariants, footprint state, checkpoint compatibility and force injection."""
+"""Physical invariants, footprint state, shared sand configuration and force injection."""
 
 import json
 from types import SimpleNamespace
@@ -17,14 +17,7 @@ from M20_newton_training.tasks.m20.mdp.foot_sand_proxy import (
     proxy_depth_limit,
     rotate_xyzw,
 )
-from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import (
-    ProxyFootForwardStepReward,
-    ProxyRotationGaitStatus,
-    ProxyRotationGaitSymmetry,
-    proxy_feet_air_time_command_scaled,
-    proxy_hipx_symmetry_l2,
-    sand_base_height_l2,
-)
+from M20_newton_training.tasks.m20.mdp.proxy_contact_rewards import proxy_feet_air_time_command_scaled
 
 
 def model(num_envs=2):
@@ -84,11 +77,12 @@ def test_explicit_drag_limiter_does_not_reverse_slip_in_one_step():
     assert proxy.out_of_domain.all()
 
 
-def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings():
+def test_proxy_task_uses_no_mpm_preserves_actions_and_siblings():
     before_walk = to_dict(DeeproboticsM20WalkEnvCfg())
     before_mpm = to_dict(DeeproboticsM20WalkOnSandEnvCfg())
     cfg = DeeproboticsM20WalkOnSandProxyEnvCfg()
-    assert to_dict(cfg.observations) == before_walk["observations"]
+    assert cfg.observations.policy.base_lin_vel is not None
+    assert before_walk["observations"]["policy"]["base_lin_vel"] is None
     assert to_dict(cfg.actions.joint_pos) == before_walk["actions"]["joint_pos"]
     assert to_dict(cfg.actions.joint_vel) == before_walk["actions"]["joint_vel"]
     assert to_dict(DeeproboticsM20WalkEnvCfg()) == before_walk
@@ -101,7 +95,6 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
         "contact_forces",
         "hipy_joint_pos_penalty",
         "knee_joint_pos_penalty",
-        "joint_acc_wheel_l2",
         "action_smooth_l2",
         "feet_slide_ang_z_cmd",
         "joint_mirror",
@@ -110,8 +103,6 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
         "sand_step_completion",
         "undesired_contacts",
         "feet_lift_consistency",
-        "joint_acc_l2",
-        "joint_torques_l2",
     ):
         assert getattr(cfg.rewards, name) is None
     # Weights remain user-tunable shared sand settings; compare both live configurations instead
@@ -123,26 +114,16 @@ def test_proxy_task_uses_no_mpm_preserves_actor_critic_interfaces_and_siblings()
     assert to_dict(cfg.rewards) == shared_rewards
     assert cfg.actions.sand_proxy.model_kind == "neural"
     assert cfg.sim.dt == 0.005 and cfg.decimation == 4
-    for name, func in (
-        ("feet_air_time", proxy_feet_air_time_command_scaled),
-        ("rotation_gait_status", ProxyRotationGaitStatus),
-        ("feet_forward_step", ProxyFootForwardStepReward),
-        ("rotation_gait_symmetry", ProxyRotationGaitSymmetry),
-    ):
-        term = getattr(cfg.rewards, name)
-        assert term.func is func and term.weight > 0
-        assert term.params["action_term_name"] == "sand_proxy"
-        assert "sensor_cfg" not in term.params
-        assert term.params["min_command_norm"] == 0.1
-    assert cfg.rewards.hipx_symmetry.func is proxy_hipx_symmetry_l2
-    assert cfg.rewards.base_height_l2.func is sand_base_height_l2
-    assert cfg.rewards.base_height_l2.params["surface_height"] == 0.20
-    assert cfg.rewards.base_height_l2.params["target_height"] > 0
+    term = cfg.rewards.feet_air_time
+    assert term.func is proxy_feet_air_time_command_scaled and term.weight > 0
+    assert term.params["action_term_name"] == "sand_proxy"
+    assert "sensor_cfg" not in term.params
+    assert term.params["min_command_norm"] == 0.1
     assert not hasattr(cfg.rewards, "command_progress")
     assert cfg.commands.base_velocity.ranges.lin_vel_x == (0.15, 0.25)
     assert cfg.commands.base_velocity.ranges.lin_vel_y == (0.0, 0.0)
     assert cfg.commands.base_velocity.ranges.ang_vel_z == (0.0, 0.0)
-    assert cfg.actions.sand_proxy.contact_force_threshold == 5.0
+    assert cfg.actions.sand_proxy.contact_force_threshold == 20.0
     for term in vars(cfg.rewards).values():
         if term is not None:
             sensor = term.params.get("sensor_cfg")
